@@ -48,11 +48,18 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Insufficient stock' });
       }
 
+      let itemPrice = foodData.fiyat;
+      const extras = items[i].selectedExtras || [];
+      for (const ex of extras) {
+        itemPrice += (ex.fiyat || 0);
+      }
+
       enrichedItems.push({
         foodId: items[i].foodId,
         quantity: items[i].quantity,
-        price: foodData.fiyat,
-        isim: foodData.isim
+        price: itemPrice,
+        isim: foodData.isim,
+        selectedExtras: extras
       });
     }
 

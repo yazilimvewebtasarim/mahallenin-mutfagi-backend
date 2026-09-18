@@ -6,7 +6,7 @@ const { db } = require('../firebase');
 router.post('/', async (req, res) => {
   console.log('POST /api/v1/chef/foods called with body:', req.body);
   try {
-    const { isim, aciklama, fiyat, porsiyon_stok, alerjen_durumu, resim_url, chefId } = req.body;
+    const { isim, aciklama, fiyat, porsiyon_stok, alerjen_durumu, resim_url, chefId, ekstralar } = req.body;
 
     if (!isim || typeof isim !== 'string' || isim.trim() === '') {
       return res.status(400).json({ error: 'Yemek ismi (isim) zorunludur' });
@@ -29,6 +29,7 @@ router.post('/', async (req, res) => {
       alerjen_durumu: alerjen_durumu ? String(alerjen_durumu).trim() : '',
       resim_url: resim_url ? String(resim_url).trim() : '',
       chefId: chefId || req.user?.userId || 'default_chef',
+      ekstralar: Array.isArray(ekstralar) ? ekstralar : [],
       createdAt: now,
       updatedAt: now
     };
@@ -111,7 +112,7 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Yemek bulunamadı' });
     }
 
-    const { isim, aciklama, fiyat, porsiyon_stok, alerjen_durumu, resim_url } = req.body;
+    const { isim, aciklama, fiyat, porsiyon_stok, alerjen_durumu, resim_url, ekstralar } = req.body;
 
     if (isim !== undefined && (typeof isim !== 'string' || isim.trim() === '')) {
       return res.status(400).json({ error: 'Geçersiz yemek ismi' });
@@ -132,6 +133,7 @@ router.put('/:id', async (req, res) => {
       ...(porsiyon_stok !== undefined && { porsiyon_stok: Number(porsiyon_stok) }),
       ...(alerjen_durumu !== undefined && { alerjen_durumu: alerjen_durumu ? String(alerjen_durumu).trim() : '' }),
       ...(resim_url !== undefined && { resim_url: resim_url ? String(resim_url).trim() : '' }),
+      ...(ekstralar !== undefined && { ekstralar: Array.isArray(ekstralar) ? ekstralar : [] }),
       updatedAt: new Date().toISOString()
     };
 
