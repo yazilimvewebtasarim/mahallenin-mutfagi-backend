@@ -30,15 +30,16 @@ router.post('/register/send-otp', async (req, res) => {
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, isim_soyad, telefon, tc_kimlik, otp, role } = req.body;
+    const { email, password, isim_soyad, telefon, tc_kimlik, role } = req.body;
 
-    if (!email || !password || !isim_soyad || !telefon || !tc_kimlik || !otp) {
-      return res.status(400).json({ error: 'All fields are required' });
+    if (!email || !password || !isim_soyad || !telefon || !tc_kimlik) {
+      return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
     }
 
-    if (otpStore.get(telefon) !== otp) {
-      return res.status(400).json({ error: 'Invalid OTP' });
-    }
+    // SMS Verification temporarily disabled by admin
+    // if (otpStore.get(telefon) !== otp) {
+    //   return res.status(400).json({ error: 'Invalid OTP' });
+    // }
 
     const validRoles = ['customer', 'chef'];
     const userRole = validRoles.includes(role) ? role : 'customer';
