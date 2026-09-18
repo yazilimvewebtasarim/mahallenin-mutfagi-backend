@@ -2,6 +2,44 @@ const express = require('express');
 const { db } = require('../firebase');
 const router = express.Router();
 
+router.get('/chefs', async (req, res) => {
+  try {
+    const snapshot = await db.collection('users').where('role', '==', 'chef').where('isVisible', '==', true).get();
+    let chefs = snapshot.docs.map(doc => ({
+      id: doc.id,
+      isim_soyad: doc.data().isim_soyad,
+      rating: doc.data().rating || 0,
+      reviewCount: doc.data().reviewCount || 0,
+      imageUrl: doc.data().profileImageUrl || null
+    }));
+    res.json({ success: true, count: chefs.length, data: chefs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/chefs/:id', async (req, res) => {
+  try {
+    const doc = await db.collection('users').doc(req.params.id).get();
+    if (!doc.exists || doc.data().role !== 'chef') {
+      return res.status(404).json({ success: false, message: 'Chef not found' });
+    }
+    const data = doc.data();
+    res.json({
+      success: true, 
+      data: {
+        id: doc.id,
+        isim_soyad: data.isim_soyad,
+        rating: data.rating || 0,
+        reviewCount: data.reviewCount || 0,
+        imageUrl: data.profileImageUrl || null
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/foods', async (req, res) => {
   try {
     const { chefId, search } = req.query;

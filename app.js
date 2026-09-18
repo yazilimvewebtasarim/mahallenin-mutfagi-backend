@@ -12,6 +12,8 @@ const storiesRoutes = require('./routes/stories');
 const financeRoutes = require('./routes/finance');
 const aiRoutes = require('./routes/ai');
 const chefSubscriptionRoutes = require('./routes/chef_subscription');
+const customerRequestsRoutes = require('./routes/customer_requests');
+const chefRequestsRoutes = require('./routes/chef_requests');
 
 const app = express();
 
@@ -21,6 +23,8 @@ app.use(express.json());
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/chef/foods', foodRoutes);
 app.use('/api/v1/customer', customerRoutes);
+app.use('/api/v1/customer/requests', customerRequestsRoutes);
+app.use('/api/v1/chef/requests', chefRequestsRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/chef/orders', chefOrderRoutes);
 app.use('/api/v1/payment', paymentRoutes);
