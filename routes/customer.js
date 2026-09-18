@@ -10,7 +10,9 @@ router.get('/chefs', async (req, res) => {
       isim_soyad: doc.data().isim_soyad,
       rating: doc.data().rating || 0,
       reviewCount: doc.data().reviewCount || 0,
-      imageUrl: doc.data().profileImageUrl || null
+      imageUrl: doc.data().profileImageUrl || null,
+      hijyenBelgesi: doc.data().hijyenBelgesi === true,
+      mutfakResmiUrl: doc.data().mutfakResmiUrl || null
     }));
     res.json({ success: true, count: chefs.length, data: chefs });
   } catch (error) {

@@ -121,4 +121,20 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Profil güncelleme (hijyen belgesi, mutfak resmi vb.)
+router.patch('/profile', async (req, res) => {
+  try {
+    const { userId, ...updateData } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    
+    await db.collection('users').doc(userId).update({
+      ...updateData,
+      updatedAt: new Date().toISOString()
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
