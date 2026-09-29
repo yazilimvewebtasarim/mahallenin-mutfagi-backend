@@ -62,6 +62,25 @@ router.put('/:id/status', authenticateJWT, authorizeRole('chef'), async (req, re
       updatedAt: new Date().toISOString()
     });
 
+    // Credit chef balance when order is marked completed
+    if (status === 'completed' && currentStatus !== 'completed') {
+      try {
+        const earnings = Number(orderData.total || orderData.subtotal || 0);
+        if (earnings > 0) {
+          const chefUserRef = db.collection('users').doc(chefId);
+          const chefUserDoc = await chefUserRef.get();
+          if (chefUserDoc && chefUserDoc.exists && typeof chefUserRef.update === 'function') {
+            const currentBalance = Number(chefUserDoc.data().balance) || 0;
+            await chefUserRef.update({
+              balance: Math.round((currentBalance + earnings) * 100) / 100
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error crediting chef balance on completed order:', err);
+      }
+    }
+
     const updatedDoc = await orderRef.get();
 
     res.json({ success: true, data: updatedDoc.data() });
