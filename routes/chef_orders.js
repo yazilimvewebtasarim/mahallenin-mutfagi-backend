@@ -1,13 +1,14 @@
 const express = require('express');
 const { db } = require('../firebase');
 const router = express.Router();
+const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
-router.get('/', async (req, res) => {
+// GET CHEF ORDERS: GET /api/v1/chef/orders
+// PROTECTED: Only authenticated chefs can see their own orders
+router.get('/', authenticateJWT, authorizeRole('chef'), async (req, res) => {
   try {
-    const { chefId } = req.query;
-    if (!chefId) {
-      return res.status(400).json({ success: false, message: 'chefId is required' });
-    }
+    // Get chefId from authenticated user, not from query
+    const chefId = req.user.userId;
 
     const snapshot = await db.collection('orders').where('chefId', '==', chefId).orderBy('createdAt', 'desc').get();
     let orders = snapshot.docs.map(doc => doc.data());
@@ -18,14 +19,15 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.put('/:id/status', async (req, res) => {
+// UPDATE ORDER STATUS: PUT /api/v1/chef/orders/:id/status
+// PROTECTED: Only authenticated chefs can update their own order status
+router.put('/:id/status', authenticateJWT, authorizeRole('chef'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, chefId } = req.body;
-
-    if (!chefId) {
-      return res.status(400).json({ success: false, message: 'chefId is required' });
-    }
+    const { status } = req.body;
+    
+    // Get chefId from authenticated user, not from request body
+    const chefId = req.user.userId;
 
     const validStatuses = ['pending', 'preparing', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
@@ -40,6 +42,8 @@ router.put('/:id/status', async (req, res) => {
     }
 
     const orderData = doc.data();
+    
+    // Check authorization: chef can only update their own orders
     if (orderData.chefId !== chefId) {
       return res.status(403).json({ success: false, message: 'Forbidden: Order belongs to another chef' });
     }

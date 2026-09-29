@@ -3,8 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { db } = require('../firebase');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key';
+const { authenticateJWT, JWT_SECRET } = require('../middleware/auth');
 
 const otpStore = new Map();
 
@@ -122,17 +121,29 @@ router.post('/login', async (req, res) => {
 });
 
 // Profil güncelleme (hijyen belgesi, mutfak resmi vb.)
-router.patch('/profile', async (req, res) => {
+// PROTECTED: Requires authentication
+router.patch('/profile', authenticateJWT, async (req, res) => {
   try {
-    const { userId, ...updateData } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const userId = req.user.userId; // Get userId from JWT token, not from request body
     
-    await db.collection('users').doc(userId).update({
-      ...updateData,
-      updatedAt: new Date().toISOString()
-    });
-    res.json({ success: true });
+    // Whitelist of allowed fields that can be updated
+    const allowedFields = ['isim_soyad', 'profileImageUrl', 'hijyenBelgesi', 'mutfakResmiUrl'];
+    
+    // Build update object with only allowed fields
+    const updateData = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+    
+    // Always update the timestamp
+    updateData.updatedAt = new Date().toISOString();
+    
+    await db.collection('users').doc(userId).update(updateData);
+    res.json({ success: true, message: 'Profile updated successfully' });
   } catch (error) {
+    console.error('Error updating profile:', error);
     res.status(500).json({ error: error.message });
   }
 });

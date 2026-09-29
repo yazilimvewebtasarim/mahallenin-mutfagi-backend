@@ -1,6 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { authenticateJWT } = require('./middleware/auth');
+
+// Route imports
 const authRoutes = require('./routes/auth');
 const foodRoutes = require('./routes/foods');
 const customerRoutes = require('./routes/customer');
@@ -21,21 +24,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// PUBLIC ROUTES (No authentication required)
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/chef/foods', foodRoutes);
 app.use('/api/v1/customer', customerRoutes);
-app.use('/api/v1/customer/requests', customerRequestsRoutes);
-app.use('/api/v1/chef/requests', chefRequestsRoutes);
-app.use('/api/v1/upload', uploadRoutes);
+app.use('/api/v1/stories', storiesRoutes);
+app.use('/api/v1/ai', aiRoutes);
+
+// PROTECTED ROUTES (Authentication required)
+app.use('/api/v1/chef/foods', foodRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/chef/orders', chefOrderRoutes);
 app.use('/api/v1/payment', paymentRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
-app.use('/api/v1/stories', storiesRoutes);
 app.use('/api/v1/chef/finance', financeRoutes);
-app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/chef/subscription', chefSubscriptionRoutes);
+app.use('/api/v1/customer/requests', customerRequestsRoutes);
+app.use('/api/v1/chef/requests', chefRequestsRoutes);
+app.use('/api/v1/upload', uploadRoutes);
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something broke!' });

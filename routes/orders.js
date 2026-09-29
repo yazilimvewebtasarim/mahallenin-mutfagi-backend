@@ -1,14 +1,17 @@
 const express = require('express');
 const { db } = require('../firebase');
 const router = express.Router();
+const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
-router.post('/', async (req, res) => {
+// CREATE ORDER: POST /api/v1/orders
+// PROTECTED: Only authenticated customers
+router.post('/', authenticateJWT, authorizeRole('customer'), async (req, res) => {
   try {
-    const { customerId, items } = req.body;
+    const { items } = req.body;
     
-    if (!customerId) {
-      return res.status(400).json({ success: false, message: 'customerId is required' });
-    }
+    // Get customerId from authenticated user, not from request body
+    const customerId = req.user.userId;
+    
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Cart items cannot be empty' });
     }
@@ -77,7 +80,7 @@ router.post('/', async (req, res) => {
     const newOrderRef = db.collection('orders').doc();
     const orderData = {
       id: newOrderRef.id,
-      customerId,
+      customerId,  // Set from authenticated user
       chefId: cartChefId,
       items: enrichedItems,
       subtotal: Math.round(subtotal * 100) / 100,
@@ -131,12 +134,12 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+// GET CUSTOMER ORDERS: GET /api/v1/orders
+// PROTECTED: Only authenticated customers can see their own orders
+router.get('/', authenticateJWT, authorizeRole('customer'), async (req, res) => {
   try {
-    const { customerId } = req.query;
-    if (!customerId) {
-      return res.status(400).json({ success: false, message: 'customerId is required' });
-    }
+    // Get customerId from authenticated user, not from query
+    const customerId = req.user.userId;
 
     const snapshot = await db.collection('orders').where('customerId', '==', customerId).orderBy('createdAt', 'desc').get();
     let orders = snapshot.docs.map(doc => doc.data());

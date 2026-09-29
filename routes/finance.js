@@ -1,16 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
+const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
 // POST /api/v1/chef/finance/update-iban
-router.post('/update-iban', async (req, res) => {
+// PROTECTED: Only authenticated chefs can update their own IBAN
+router.post('/update-iban', authenticateJWT, authorizeRole('chef'), async (req, res) => {
   try {
-    const { chefId, iban } = req.body;
-    if (!chefId || !iban) {
-      return res.status(400).json({ error: 'chefId and iban are required' });
+    const chefId = req.user.userId;  // Get from authenticated user
+    const { iban } = req.body;
+    
+    if (!iban) {
+      return res.status(400).json({ error: 'IBAN is required' });
     }
 
-    await db.collection('chefs').doc(chefId).update({
+    // Use 'users' collection instead of 'chefs'
+    await db.collection('users').doc(chefId).update({
       iban: iban
     });
 
@@ -21,14 +26,23 @@ router.post('/update-iban', async (req, res) => {
 });
 
 // POST /api/v1/chef/finance/withdraw
-router.post('/withdraw', async (req, res) => {
+// PROTECTED: Only authenticated chefs can withdraw their own funds
+router.post('/withdraw', authenticateJWT, authorizeRole('chef'), async (req, res) => {
   try {
-    const { chefId, amount } = req.body;
-    if (!chefId || !amount) {
-      return res.status(400).json({ error: 'chefId and amount are required' });
+    const chefId = req.user.userId;  // Get from authenticated user
+    const { amount } = req.body;
+    
+    if (!amount) {
+      return res.status(400).json({ error: 'amount is required' });
     }
 
-    const chefRef = db.collection('chefs').doc(chefId);
+    // Validate amount
+    if (typeof amount !== 'number' || amount <= 0 || !isFinite(amount)) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+
+    // Use 'users' collection instead of 'chefs'
+    const chefRef = db.collection('users').doc(chefId);
     const chefDoc = await chefRef.get();
 
     if (!chefDoc.exists) {
@@ -40,20 +54,38 @@ router.post('/withdraw', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient funds' });
     }
 
-    await chefRef.update({
-      balance: (chefData.balance || 0) - amount
+    // Use transaction for atomicity
+    const transaction = db.transaction();
+    
+    await transaction.run(async (t) => {
+      const freshChefDoc = await t.get(chefRef);
+      const freshBalance = freshChefDoc.data().balance || 0;
+      
+      if (freshBalance < amount) {
+        throw new Error('Insufficient funds');
+      }
+      
+      // Update chef balance
+      t.update(chefRef, {
+        balance: freshBalance - amount
+      });
+      
+      // Create withdrawal record
+      const withdrawalRef = db.collection('withdrawals').doc();
+      t.set(withdrawalRef, {
+        chefId,
+        amount,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
     });
 
-    const withdrawalRef = db.collection('withdrawals').doc();
-    await withdrawalRef.set({
-      chefId,
-      amount,
-      status: 'pending',
-      timestamp: new Date()
+    res.status(200).json({ 
+      message: 'Withdrawal requested successfully',
+      success: true
     });
-
-    res.status(200).json({ message: 'Withdrawal requested successfully', withdrawalId: withdrawalRef.id });
   } catch (error) {
+    console.error('Error processing withdrawal:', error);
     res.status(500).json({ error: error.message });
   }
 });
