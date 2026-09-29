@@ -22,6 +22,10 @@ function getEffectiveApiKey() {
   return rawKey;
 }
 
+function getEffectiveApiSecret() {
+  return process.env.SHOPIER_API_SECRET || process.env.SHOPIER_API_KEY || 'shopier_test_api_secret';
+}
+
 /**
  * Generate Shopier payment form data with SHA256 HMAC signature
  */
@@ -39,7 +43,7 @@ function generateShopierPaymentData({
   productName = 'Mahallenin Mutfagi Siparis'
 }) {
   const apiKey = getEffectiveApiKey();
-  const apiSecret = SHOPIER_API_SECRET;
+  const apiSecret = getEffectiveApiSecret();
 
   const cleanPhone = (buyerPhone || '05555555555').replace(/\D/g, '');
   const formattedPhone = cleanPhone.startsWith('0') ? cleanPhone : `0${cleanPhone}`;
@@ -95,7 +99,7 @@ function generateShopierPaymentData({
  * Verify Shopier callback signature
  */
 function verifyShopierCallback({ platform_order_id, status, random_nr, signature }) {
-  const apiSecret = SHOPIER_API_SECRET;
+  const apiSecret = getEffectiveApiSecret();
   const expectedData = `${random_nr}${platform_order_id}`;
   const expectedSignature = crypto
     .createHmac('sha256', apiSecret)
