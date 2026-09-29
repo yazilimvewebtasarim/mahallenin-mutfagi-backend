@@ -78,16 +78,57 @@ router.post('/:requestId/accept-bid', authenticateJWT, authorizeRole('customer')
       return res.status(403).json({ success: false, message: 'Forbidden: You do not own this request' });
     }
 
+    if (data.status !== 'open') {
+      return res.status(400).json({ success: false, message: 'Request is no longer open for accepting bids' });
+    }
+
     const bid = (data.bids || []).find(b => b.chefId === chefId);
     if (!bid) return res.status(400).json({ success: false, message: 'Bid not found' });
+
+    // Create corresponding order in orders collection
+    const orderRef = db.collection('orders').doc();
+    const orderData = {
+      id: orderRef.id,
+      customerId,
+      chefId: bid.chefId,
+      requestId: req.params.requestId,
+      isCustomRequest: true,
+      items: [
+        {
+          foodId: `custom_${req.params.requestId}`,
+          quantity: 1,
+          price: Number(bid.price),
+          isim: `Özel Talep: ${data.title}`,
+          aciklama: data.description,
+          chefNote: bid.note || ''
+        }
+      ],
+      subtotal: Number(bid.price),
+      deliveryFee: 0,
+      vatIncluded: Math.round((Number(bid.price) - (Number(bid.price) / 1.10)) * 100) / 100,
+      total: Number(bid.price),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (typeof orderRef.set === 'function') {
+      await orderRef.set(orderData);
+    }
 
     await reqRef.update({
       status: 'accepted',
       acceptedBid: bid,
+      orderId: orderRef.id,
       updatedAt: new Date().toISOString()
     });
 
-    res.json({ success: true, message: 'Bid accepted', data: { ...data, status: 'accepted', acceptedBid: bid } });
+    res.json({
+      success: true,
+      message: 'Bid accepted and order created successfully',
+      orderId: orderRef.id,
+      data: { ...data, status: 'accepted', acceptedBid: bid, orderId: orderRef.id }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
