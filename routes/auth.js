@@ -127,7 +127,8 @@ router.patch('/profile', authenticateJWT, async (req, res) => {
     const userId = req.user.userId; // Get userId from JWT token, not from request body
     
     // Whitelist of allowed fields that can be updated
-    const allowedFields = ['isim_soyad', 'profileImageUrl', 'hijyenBelgesi', 'mutfakResmiUrl'];
+    const allowedFields = ['isim_soyad', 'profileImageUrl', 'hijyenBelgesi', 'hijyenBelgesiUrl', 'mutfakResmiUrl'];
+
     
     // Build update object with only allowed fields
     const updateData = {};
