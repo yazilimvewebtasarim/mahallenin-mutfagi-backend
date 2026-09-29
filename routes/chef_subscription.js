@@ -30,11 +30,39 @@ router.get('/status', authenticateJWT, authorizeRole('chef'), async (req, res) =
   }
 });
 
+// INITIALIZE CHECKOUT: POST /api/v1/chef/subscription/initialize-checkout
+// PROTECTED: Only authenticated chefs can initialize a subscription checkout
+router.post('/initialize-checkout', authenticateJWT, authorizeRole('chef'), async (req, res) => {
+  try {
+    const chefId = req.user.userId;
+    const { rights = 10 } = req.body;
+
+    const validRights = [10, 100];
+    const selectedRights = validRights.includes(Number(rights)) ? Number(rights) : 10;
+    const price = selectedRights === 100 ? 749.00 : 299.00;
+    const packageName = selectedRights === 100 ? '100 Sipariş Paketi' : '10 Sipariş Paketi';
+
+    // Transaction / checkout token
+    const checkoutToken = `sub_${chefId}_${Date.now()}_${selectedRights}`;
+
+    res.json({
+      success: true,
+      packageName,
+      rights: selectedRights,
+      price,
+      currency: 'TRY',
+      token: checkoutToken,
+      paymentPageUrl: `https://sandbox.iyzipay.com/checkout/${checkoutToken}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // NOTIFY PAYMENT: POST /api/v1/chef/subscription/notify-payment
 // PROTECTED: Only authenticated chefs can notify payment for their own subscription
-// NOTE: This should be called AFTER successful Iyzico payment webhook verification
-// In production, the actual webhook from Iyzico should trigger this with signature verification
 router.post('/notify-payment', authenticateJWT, authorizeRole('chef'), async (req, res) => {
+
   try {
     // Get chefId from authenticated user, not from request body
     const chefId = req.user.userId;

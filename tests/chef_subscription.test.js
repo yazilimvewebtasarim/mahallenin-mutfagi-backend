@@ -145,4 +145,45 @@ describe('Chef Subscription API', () => {
       });
     });
   });
+
+  describe('POST /api/v1/chef/subscription/initialize-checkout', () => {
+    it('should return 401 if unauthenticated', async () => {
+      const res = await request(app).post('/api/v1/chef/subscription/initialize-checkout').send({});
+      expect(res.status).toBe(401);
+    });
+
+    it('should return 403 if customer tries to initialize subscription', async () => {
+      const res = await request(app)
+        .post('/api/v1/chef/subscription/initialize-checkout')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ rights: 10 });
+      expect(res.status).toBe(403);
+    });
+
+    it('should initialize checkout with 10 package (299 TL)', async () => {
+      const res = await request(app)
+        .post('/api/v1/chef/subscription/initialize-checkout')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ rights: 10 });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.rights).toBe(10);
+      expect(res.body.price).toBe(299.00);
+      expect(res.body.paymentPageUrl).toContain('iyzipay.com');
+      expect(res.body.token).toBeDefined();
+    });
+
+    it('should initialize checkout with 100 package (749 TL)', async () => {
+      const res = await request(app)
+        .post('/api/v1/chef/subscription/initialize-checkout')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ rights: 100 });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.rights).toBe(100);
+      expect(res.body.price).toBe(749.00);
+      expect(res.body.paymentPageUrl).toContain('iyzipay.com');
+    });
+  });
 });
+
