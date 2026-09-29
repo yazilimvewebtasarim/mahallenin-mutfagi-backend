@@ -54,10 +54,8 @@ router.post('/withdraw', authenticateJWT, authorizeRole('chef'), async (req, res
       return res.status(400).json({ error: 'Insufficient funds' });
     }
 
-    // Use transaction for atomicity
-    const transaction = db.transaction();
-    
-    await transaction.run(async (t) => {
+    // Use runTransaction for atomicity
+    await db.runTransaction(async (t) => {
       const freshChefDoc = await t.get(chefRef);
       const freshBalance = freshChefDoc.data().balance || 0;
       

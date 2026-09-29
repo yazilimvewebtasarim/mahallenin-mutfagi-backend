@@ -8,12 +8,24 @@ jest.mock('../firebase', () => ({
   }
 }));
 
+jest.mock('../middleware/auth', () => ({
+  authenticateJWT: (req, res, next) => {
+    req.user = { userId: 'chef-42', role: 'chef' };
+    next();
+  },
+  authorizeRole: () => (req, res, next) => next(),
+  JWT_SECRET: 'test_jwt_secret'
+}));
+
 describe('Empirical Challenger: Foods API Boundary & Stress Tests', () => {
   let mockAdd, mockGet, mockDoc, mockUpdate, mockDelete, mockWhere;
 
   beforeEach(() => {
     mockAdd = jest.fn();
-    mockGet = jest.fn();
+    mockGet = jest.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ chefId: 'chef-42', isim: 'Mock Food' })
+    });
     mockUpdate = jest.fn();
     mockDelete = jest.fn();
     mockDoc = jest.fn().mockReturnValue({
@@ -21,6 +33,7 @@ describe('Empirical Challenger: Foods API Boundary & Stress Tests', () => {
       update: mockUpdate,
       delete: mockDelete
     });
+
     mockWhere = jest.fn().mockReturnValue({
       get: mockGet
     });

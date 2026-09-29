@@ -1,8 +1,10 @@
 const express = require('express');
 const { db } = require('../firebase');
 const router = express.Router();
+const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
-router.post('/create-cash', async (req, res) => {
+// PROTECTED: Only authenticated customer who owns the order can set cash payment
+router.post('/create-cash', authenticateJWT, authorizeRole('customer'), async (req, res) => {
   try {
     const { orderId } = req.body;
     if (!orderId) {
@@ -16,9 +18,15 @@ router.post('/create-cash', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    const orderData = orderDoc.data();
+    if (orderData.customerId !== req.user.userId) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not own this order' });
+    }
+
     await orderRef.update({
       paymentMethod: 'cash',
-      paymentStatus: 'pending' // For cash on delivery, payment is pending until delivery
+      paymentStatus: 'pending', // For cash on delivery, payment is pending until delivery
+      updatedAt: new Date().toISOString()
     });
 
     res.status(200).json({ success: true, message: 'Cash payment created', orderId });
@@ -27,7 +35,8 @@ router.post('/create-cash', async (req, res) => {
   }
 });
 
-router.post('/checkout-form/init', async (req, res) => {
+// PROTECTED: Online payment endpoint (if enabled)
+router.post('/checkout-form/init', authenticateJWT, authorizeRole('customer'), async (req, res) => {
   try {
     const { orderId, amount } = req.body;
     if (!orderId || !amount) {
@@ -41,9 +50,15 @@ router.post('/checkout-form/init', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    const orderData = orderDoc.data();
+    if (orderData.customerId !== req.user.userId) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not own this order' });
+    }
+
     await orderRef.update({
       paymentMethod: 'credit_card',
-      paymentStatus: 'initiated'
+      paymentStatus: 'initiated',
+      updatedAt: new Date().toISOString()
     });
 
     res.status(200).json({ 
@@ -57,3 +72,4 @@ router.post('/checkout-form/init', async (req, res) => {
 });
 
 module.exports = router;
+

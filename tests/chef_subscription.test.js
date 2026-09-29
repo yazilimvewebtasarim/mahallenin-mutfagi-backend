@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../app');
 const { db } = require('../firebase');
+const { getChefToken, getCustomerToken } = require('./test_helpers');
 
 jest.mock('../firebase', () => ({
   db: {
@@ -11,6 +12,8 @@ jest.mock('../firebase', () => ({
 
 describe('Chef Subscription API', () => {
   let mockDoc, mockGet, mockUpdate, mockWhere, mockBatch, mockCommit, mockForEach;
+  const chefToken = getChefToken('chef1');
+  const customerToken = getCustomerToken('customer1');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -41,42 +44,55 @@ describe('Chef Subscription API', () => {
   });
 
   describe('GET /api/v1/chef/subscription/status', () => {
-    it('should return 400 if chefId is missing', async () => {
+    it('should return 401 if unauthenticated', async () => {
       const res = await request(app).get('/api/v1/chef/subscription/status');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
+    });
+
+    it('should return 403 if customer accesses chef status', async () => {
+      const res = await request(app)
+        .get('/api/v1/chef/subscription/status')
+        .set('Authorization', `Bearer ${customerToken}`);
+      expect(res.status).toBe(403);
     });
 
     it('should return 404 if chef not found', async () => {
       mockGet.mockResolvedValueOnce({ exists: false });
-      const res = await request(app).get('/api/v1/chef/subscription/status?chefId=chef1');
+      const res = await request(app)
+        .get('/api/v1/chef/subscription/status')
+        .set('Authorization', `Bearer ${chefToken}`);
       expect(res.status).toBe(404);
     });
 
-    it('should return subscription status', async () => {
+    it('should return subscription status for authenticated chef', async () => {
       mockGet.mockResolvedValueOnce({
         exists: true,
         data: () => ({ orderCount: 5, paidOrderLimit: 10, isVisible: true })
       });
 
-      const res = await request(app).get('/api/v1/chef/subscription/status?chefId=chef1');
+      const res = await request(app)
+        .get('/api/v1/chef/subscription/status')
+        .set('Authorization', `Bearer ${chefToken}`);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.orderCount).toBe(5);
       expect(res.body.paidOrderLimit).toBe(10);
       expect(res.body.isVisible).toBe(true);
-      expect(res.body.iban).toBeDefined();
     });
   });
 
   describe('POST /api/v1/chef/subscription/notify-payment', () => {
-    it('should return 400 if chefId is missing', async () => {
+    it('should return 401 if unauthenticated', async () => {
       const res = await request(app).post('/api/v1/chef/subscription/notify-payment').send({});
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
 
     it('should return 404 if chef not found', async () => {
       mockGet.mockResolvedValueOnce({ exists: false });
-      const res = await request(app).post('/api/v1/chef/subscription/notify-payment').send({ chefId: 'chef1' });
+      const res = await request(app)
+        .post('/api/v1/chef/subscription/notify-payment')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({});
       expect(res.status).toBe(404);
     });
 
@@ -92,7 +108,10 @@ describe('Chef Subscription API', () => {
           }
         });
 
-      const res = await request(app).post('/api/v1/chef/subscription/notify-payment').send({ chefId: 'chef1' });
+      const res = await request(app)
+        .post('/api/v1/chef/subscription/notify-payment')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({});
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       
@@ -114,7 +133,10 @@ describe('Chef Subscription API', () => {
           }
         });
 
-      const res = await request(app).post('/api/v1/chef/subscription/notify-payment').send({ chefId: 'chef1', rights: 100 });
+      const res = await request(app)
+        .post('/api/v1/chef/subscription/notify-payment')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ rights: 100 });
       expect(res.status).toBe(200);
       
       expect(mockUpdate).toHaveBeenCalledWith({

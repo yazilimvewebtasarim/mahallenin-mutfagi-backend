@@ -8,12 +8,24 @@ jest.mock('../firebase', () => ({
   }
 }));
 
+jest.mock('../middleware/auth', () => ({
+  authenticateJWT: (req, res, next) => {
+    req.user = { userId: 'chef-42', role: 'chef' };
+    next();
+  },
+  authorizeRole: () => (req, res, next) => next(),
+  JWT_SECRET: 'test_jwt_secret'
+}));
+
 describe('Chef Foods API (/api/v1/chef/foods)', () => {
   let mockAdd, mockGet, mockDoc, mockUpdate, mockDelete, mockWhere;
 
   beforeEach(() => {
     mockAdd = jest.fn();
-    mockGet = jest.fn();
+    mockGet = jest.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ chefId: 'chef-42', isim: 'Mock Food' })
+    });
     mockUpdate = jest.fn();
     mockDelete = jest.fn();
     mockDoc = jest.fn().mockReturnValue({
@@ -21,6 +33,7 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
       update: mockUpdate,
       delete: mockDelete
     });
+
     mockWhere = jest.fn().mockReturnValue({
       get: mockGet
     });
@@ -97,12 +110,13 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
         .send(payload);
 
       expect(response.status).toBe(201);
-      expect(response.body.food.chefId).toBe('default_chef');
+      expect(response.body.food.chefId).toBe('chef-42');
       expect(mockAdd).toHaveBeenCalledWith(
         expect.objectContaining({
-          chefId: 'default_chef'
+          chefId: 'chef-42'
         })
       );
+
     });
 
     it('should return 400 when required fields are missing', async () => {
@@ -258,7 +272,7 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
 
   describe('PUT /api/v1/chef/foods/:id', () => {
     it('should update food dish details and return 200', async () => {
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       mockUpdate.mockResolvedValueOnce({});
 
       const response = await request(app)
@@ -301,19 +315,19 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
     });
 
     it('should return 400 if updating with invalid field values', async () => {
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       const res1 = await request(app)
         .put('/api/v1/chef/foods/food-123')
         .send({ fiyat: -10 });
       expect(res1.status).toBe(400);
 
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       const res2 = await request(app)
         .put('/api/v1/chef/foods/food-123')
         .send({ porsiyon_stok: -5 });
       expect(res2.status).toBe(400);
 
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       const res3 = await request(app)
         .put('/api/v1/chef/foods/food-123')
         .send({ isim: '   ' });
@@ -322,7 +336,7 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
 
     it('should return 500 when Firestore update fails', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       mockUpdate.mockRejectedValueOnce(new Error('Firestore update error'));
 
       const response = await request(app)
@@ -337,7 +351,7 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
 
   describe('DELETE /api/v1/chef/foods/:id', () => {
     it('should delete food dish and return 200', async () => {
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       mockDelete.mockResolvedValueOnce({});
 
       const response = await request(app).delete('/api/v1/chef/foods/food-123');
@@ -359,7 +373,7 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
 
     it('should return 500 when Firestore delete fails', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      mockGet.mockResolvedValueOnce({ exists: true });
+      mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef-42' }) });
       mockDelete.mockRejectedValueOnce(new Error('Firestore delete error'));
 
       const response = await request(app).delete('/api/v1/chef/foods/food-123');
@@ -369,4 +383,5 @@ describe('Chef Foods API (/api/v1/chef/foods)', () => {
       consoleSpy.mockRestore();
     });
   });
+
 });

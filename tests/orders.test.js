@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../app');
 const { db } = require('../firebase');
+const { getCustomerToken, getChefToken } = require('./test_helpers');
 
 jest.mock('../firebase', () => ({
   db: {
@@ -11,6 +12,8 @@ jest.mock('../firebase', () => ({
 
 describe('Orders API', () => {
   let mockGet, mockWhere, mockOrderBy, mockDoc, mockSet, mockUpdate, mockCommit, mockAdd;
+  const customerToken = getCustomerToken('c1');
+  const chefToken = getChefToken('chef1');
 
   beforeEach(() => {
     mockGet = jest.fn();
@@ -53,29 +56,36 @@ describe('Orders API', () => {
   });
 
   describe('POST /api/v1/orders', () => {
-    it('should fail if customerId is missing', async () => {
+    it('should fail with 401 if unauthenticated', async () => {
       const res = await request(app).post('/api/v1/orders').send({ items: [] });
-      expect(res.status).toBe(400);
-      expect(res.body.message).toBe('customerId is required');
+      expect(res.status).toBe(401);
     });
 
     it('should fail if items are missing or empty', async () => {
-      const res = await request(app).post('/api/v1/orders').send({ customerId: 'c1', items: [] });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ items: [] });
       expect(res.status).toBe(400);
     });
 
     it('should fail if item data is invalid', async () => {
-      const res = await request(app).post('/api/v1/orders').send({ customerId: 'c1', items: [{ foodId: 'f1', quantity: 0 }] });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ items: [{ foodId: 'f1', quantity: 0 }] });
       expect(res.status).toBe(400);
     });
 
     it('should fail if food not found', async () => {
       mockGet.mockResolvedValueOnce({ exists: false });
       
-      const res = await request(app).post('/api/v1/orders').send({
-        customerId: 'c1',
-        items: [{ foodId: 'f1', quantity: 1 }]
-      });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          items: [{ foodId: 'f1', quantity: 1 }]
+        });
       
       expect(res.status).toBe(404);
       expect(res.body.message).toBe('Food not found');
@@ -85,10 +95,12 @@ describe('Orders API', () => {
       mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef1', fiyat: 100, porsiyon_stok: 10 }) })
              .mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef2', fiyat: 50, porsiyon_stok: 10 }) });
              
-      const res = await request(app).post('/api/v1/orders').send({
-        customerId: 'c1',
-        items: [{ foodId: 'f1', quantity: 1 }, { foodId: 'f2', quantity: 1 }]
-      });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          items: [{ foodId: 'f1', quantity: 1 }, { foodId: 'f2', quantity: 1 }]
+        });
       
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('KITCHEN_CONFLICT');
@@ -97,10 +109,12 @@ describe('Orders API', () => {
     it('should fail if insufficient stock', async () => {
       mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ chefId: 'chef1', fiyat: 100, porsiyon_stok: 2 }) });
              
-      const res = await request(app).post('/api/v1/orders').send({
-        customerId: 'c1',
-        items: [{ foodId: 'f1', quantity: 3 }]
-      });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          items: [{ foodId: 'f1', quantity: 3 }]
+        });
       
       expect(res.status).toBe(400);
       expect(res.body.message).toBe('Insufficient stock');
@@ -112,10 +126,12 @@ describe('Orders API', () => {
       mockUpdate.mockReturnValue();
       mockCommit.mockResolvedValue();
 
-      const res = await request(app).post('/api/v1/orders').send({
-        customerId: 'c1',
-        items: [{ foodId: 'f1', quantity: 1 }]
-      });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          items: [{ foodId: 'f1', quantity: 1 }]
+        });
       
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -134,10 +150,12 @@ describe('Orders API', () => {
       mockUpdate.mockReturnValue();
       mockCommit.mockResolvedValue();
 
-      const res = await request(app).post('/api/v1/orders').send({
-        customerId: 'c1',
-        items: [{ foodId: 'f1', quantity: 1 }]
-      });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          items: [{ foodId: 'f1', quantity: 1 }]
+        });
       
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -147,28 +165,32 @@ describe('Orders API', () => {
 
     it('should handle internal errors', async () => {
       mockGet.mockRejectedValue(new Error('DB Error'));
-      const res = await request(app).post('/api/v1/orders').send({
-        customerId: 'c1',
-        items: [{ foodId: 'f1', quantity: 1 }]
-      });
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          items: [{ foodId: 'f1', quantity: 1 }]
+        });
       expect(res.status).toBe(500);
     });
   });
 
   describe('GET /api/v1/orders', () => {
-    it('should fail if customerId is missing', async () => {
+    it('should fail with 401 if unauthenticated', async () => {
       const res = await request(app).get('/api/v1/orders');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
 
-    it('should return orders', async () => {
+    it('should return orders for authenticated customer', async () => {
       mockGet.mockResolvedValue({
         docs: [
           { data: () => ({ id: 'o1', customerId: 'c1' }) }
         ]
       });
 
-      const res = await request(app).get('/api/v1/orders?customerId=c1');
+      const res = await request(app)
+        .get('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`);
       expect(res.status).toBe(200);
       expect(res.body.count).toBe(1);
       expect(res.body.data[0].id).toBe('o1');
@@ -176,25 +198,29 @@ describe('Orders API', () => {
 
     it('should handle db errors', async () => {
       mockGet.mockRejectedValue(new Error('DB Error'));
-      const res = await request(app).get('/api/v1/orders?customerId=c1');
+      const res = await request(app)
+        .get('/api/v1/orders')
+        .set('Authorization', `Bearer ${customerToken}`);
       expect(res.status).toBe(500);
     });
   });
 
   describe('GET /api/v1/chef/orders', () => {
-    it('should fail if chefId is missing', async () => {
+    it('should fail with 401 if unauthenticated', async () => {
       const res = await request(app).get('/api/v1/chef/orders');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
 
-    it('should return chef orders', async () => {
+    it('should return chef orders for authenticated chef', async () => {
       mockGet.mockResolvedValue({
         docs: [
           { data: () => ({ id: 'o1', chefId: 'chef1' }) }
         ]
       });
 
-      const res = await request(app).get('/api/v1/chef/orders?chefId=chef1');
+      const res = await request(app)
+        .get('/api/v1/chef/orders')
+        .set('Authorization', `Bearer ${chefToken}`);
       expect(res.status).toBe(200);
       expect(res.body.count).toBe(1);
       expect(res.body.data[0].id).toBe('o1');
@@ -202,34 +228,45 @@ describe('Orders API', () => {
 
     it('should handle db errors', async () => {
       mockGet.mockRejectedValue(new Error('DB Error'));
-      const res = await request(app).get('/api/v1/chef/orders?chefId=chef1');
+      const res = await request(app)
+        .get('/api/v1/chef/orders')
+        .set('Authorization', `Bearer ${chefToken}`);
       expect(res.status).toBe(500);
     });
   });
 
   describe('PUT /api/v1/chef/orders/:id/status', () => {
-    it('should fail if chefId is missing', async () => {
+    it('should fail with 401 if unauthenticated', async () => {
       const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ status: 'preparing' });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
 
     it('should fail if status is invalid', async () => {
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'invalid' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'invalid' });
       expect(res.status).toBe(400);
     });
 
     it('should fail if order not found', async () => {
       mockGet.mockResolvedValue({ exists: false });
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'preparing' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'preparing' });
       expect(res.status).toBe(404);
     });
 
     it('should fail if order belongs to another chef', async () => {
       mockGet.mockResolvedValue({
         exists: true,
-        data: () => ({ chefId: 'chef2' })
+        data: () => ({ chefId: 'other_chef' })
       });
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'preparing' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'preparing' });
       expect(res.status).toBe(403);
     });
 
@@ -238,7 +275,10 @@ describe('Orders API', () => {
         exists: true,
         data: () => ({ chefId: 'chef1', status: 'cancelled' })
       });
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'preparing' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'preparing' });
       expect(res.status).toBe(400);
     });
 
@@ -247,11 +287,14 @@ describe('Orders API', () => {
         exists: true,
         data: () => ({ chefId: 'chef1', status: 'completed' })
       });
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'preparing' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'preparing' });
       expect(res.status).toBe(400);
     });
 
-    it('should update status successfully', async () => {
+    it('should update status successfully for own order', async () => {
       mockGet.mockResolvedValueOnce({
         exists: true,
         data: () => ({ chefId: 'chef1', status: 'pending' })
@@ -262,7 +305,10 @@ describe('Orders API', () => {
 
       mockUpdate.mockResolvedValue();
 
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'preparing' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'preparing' });
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe('preparing');
       expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'preparing' }));
@@ -270,7 +316,10 @@ describe('Orders API', () => {
 
     it('should handle db errors', async () => {
       mockGet.mockRejectedValue(new Error('DB Error'));
-      const res = await request(app).put('/api/v1/chef/orders/o1/status').send({ chefId: 'chef1', status: 'preparing' });
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'preparing' });
       expect(res.status).toBe(500);
     });
   });

@@ -1,17 +1,20 @@
 const express = require('express');
 const { db } = require('../firebase');
 const router = express.Router();
+const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
-router.post('/', async (req, res) => {
+// PROTECTED: Only authenticated customers who actually ordered can submit a review
+router.post('/', authenticateJWT, authorizeRole('customer'), async (req, res) => {
   try {
-    const { orderId, customerId, chefId, rating, comment } = req.body;
+    const { orderId, rating, comment } = req.body;
+    const customerId = req.user.userId;
     
-    if (!orderId || !customerId || !chefId || rating === undefined) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    if (!orderId || rating === undefined) {
+      return res.status(400).json({ success: false, message: 'orderId and rating are required' });
     }
 
-    if (rating < 1 || rating > 5) {
-      return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, message: 'Rating must be an integer between 1 and 5' });
     }
 
     // Verify order exists
@@ -22,7 +25,14 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (orderDoc.data().status !== 'completed' && orderDoc.data().status !== 'delivered') {
+    const orderData = orderDoc.data();
+
+    // Verify customer is the one who made the order
+    if (orderData.customerId !== customerId) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You can only review your own orders' });
+    }
+
+    if (orderData.status !== 'completed' && orderData.status !== 'delivered') {
       return res.status(400).json({ success: false, message: 'Can only review completed orders' });
     }
 
@@ -32,6 +42,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order already reviewed' });
     }
 
+    const chefId = orderData.chefId;
     const reviewRef = db.collection('reviews').doc();
     const reviewData = {
       id: reviewRef.id,
@@ -46,6 +57,7 @@ router.post('/', async (req, res) => {
     await reviewRef.set(reviewData);
 
     res.status(201).json({ success: true, data: reviewData });
+
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

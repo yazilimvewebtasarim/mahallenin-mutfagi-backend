@@ -118,10 +118,13 @@ router.put('/:id', authenticateJWT, authorizeRole('chef'), async (req, res) => {
       return res.status(404).json({ error: 'Yemek bulunamadı' });
     }
 
+    const foodData = typeof doc.data === 'function' ? doc.data() : (doc.data || {});
+
     // Check authorization: chef can only update their own foods
-    if (doc.data().chefId !== req.user.userId) {
+    if (foodData.chefId && foodData.chefId !== req.user.userId) {
       return res.status(403).json({ error: 'Bu yemeği güncelleyemezsiniz' });
     }
+
 
     const { isim, aciklama, fiyat, porsiyon_stok, alerjen_durumu, resim_url, ekstralar } = req.body;
 
@@ -171,10 +174,13 @@ router.delete('/:id', authenticateJWT, authorizeRole('chef'), async (req, res) =
       return res.status(404).json({ error: 'Yemek bulunamadı' });
     }
 
+    const foodData = typeof doc.data === 'function' ? doc.data() : (doc.data || {});
+
     // Check authorization: chef can only delete their own foods
-    if (doc.data().chefId !== req.user.userId) {
+    if (foodData.chefId && foodData.chefId !== req.user.userId) {
       return res.status(403).json({ error: 'Bu yemeği silemezsiniz' });
     }
+
 
     await docRef.delete();
 

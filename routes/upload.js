@@ -1,10 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const { admin } = require('../firebase');
+const { authenticateJWT } = require('../middleware/auth');
 const router = express.Router();
 
 // Firebase Storage bucket
-const bucket = admin.storage().bucket('mahallenin-mutfagi.appspot.com');
+const bucket = (admin && typeof admin.storage === 'function') 
+  ? admin.storage().bucket('mahallenin-mutfagi.appspot.com') 
+  : null;
+
 
 // Multer: bellekte tut (disk'e yazma)
 const upload = multer({
@@ -20,13 +24,17 @@ const upload = multer({
   }
 });
 
-router.post('/', upload.single('file'), async (req, res) => {
+// PROTECTED: Only authenticated users can upload files
+router.post('/', authenticateJWT, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Dosya bulunamadı.' });
     }
 
-    const { folder = 'general' } = req.body; // folder: 'foods', 'kitchens', 'hygiene'
+    const allowedFolders = ['foods', 'kitchens', 'hygiene', 'avatars', 'general'];
+    const requestedFolder = req.body.folder;
+    const folder = allowedFolders.includes(requestedFolder) ? requestedFolder : 'general';
+
     const timestamp = Date.now();
     const ext = req.file.originalname.split('.').pop();
     const fileName = `${folder}/${timestamp}_${Math.random().toString(36).slice(2)}.${ext}`;

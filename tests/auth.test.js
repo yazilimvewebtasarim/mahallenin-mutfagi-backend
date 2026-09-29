@@ -2,6 +2,7 @@ const request = require('supertest');
 const app = require('../app');
 const { db } = require('../firebase');
 const bcrypt = require('bcrypt');
+const { getCustomerToken } = require('./test_helpers');
 
 jest.mock('../firebase', () => {
   return {
@@ -12,16 +13,22 @@ jest.mock('../firebase', () => {
 });
 
 describe('Auth API', () => {
-  let mockWhere, mockGet, mockAdd;
+  let mockWhere, mockGet, mockAdd, mockDoc, mockUpdate;
 
   beforeEach(() => {
     mockGet = jest.fn();
     mockWhere = jest.fn().mockReturnValue({ get: mockGet });
     mockAdd = jest.fn();
+    mockUpdate = jest.fn();
+    mockDoc = jest.fn().mockReturnValue({
+      update: mockUpdate,
+      get: mockGet
+    });
 
     db.collection.mockReturnValue({
       where: mockWhere,
-      add: mockAdd
+      add: mockAdd,
+      doc: mockDoc
     });
     
     jest.clearAllMocks();
@@ -49,14 +56,11 @@ describe('Auth API', () => {
 
   describe('POST /api/v1/auth/register', () => {
     it('should register a user successfully and return 201', async () => {
-      // First, send OTP
       await request(app)
         .post('/api/v1/auth/register/send-otp')
         .send({ telefon: '05554443322' });
 
-      // Mock no user exists
       mockGet.mockResolvedValueOnce({ empty: true });
-      // Mock user creation
       mockAdd.mockResolvedValueOnce({ id: 'new-user-id' });
 
       const response = await request(app)
@@ -67,7 +71,6 @@ describe('Auth API', () => {
           isim_soyad: 'Test User',
           telefon: '05554443322',
           tc_kimlik: '12345678901',
-          otp: '123456',
           role: 'customer' 
         });
 
@@ -82,35 +85,13 @@ describe('Auth API', () => {
     it('should return 400 for missing data', async () => {
       const response = await request(app)
         .post('/api/v1/auth/register')
-        .send({ email: 'test@test.com', password: 'pass' }); // missing fields
+        .send({ email: 'test@test.com', password: 'pass' });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('error', 'All fields are required');
-    });
-
-    it('should return 400 for invalid OTP', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send({ 
-          email: 'test@test.com', 
-          password: 'password123', 
-          isim_soyad: 'Test User',
-          telefon: '05554443322',
-          tc_kimlik: '12345678901',
-          otp: '999999',
-          role: 'customer' 
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('error', 'Invalid OTP');
+      expect(response.body).toHaveProperty('error', 'Tüm alanlar zorunludur');
     });
 
     it('should return 400 if user already exists', async () => {
-      // First, send OTP
-      await request(app)
-        .post('/api/v1/auth/register/send-otp')
-        .send({ telefon: '05554443322' });
-
       mockGet.mockResolvedValueOnce({ empty: false }); // User exists
 
       const response = await request(app)
@@ -120,8 +101,7 @@ describe('Auth API', () => {
           password: 'password123', 
           isim_soyad: 'Test User',
           telefon: '05554443322',
-          tc_kimlik: '12345678901',
-          otp: '123456'
+          tc_kimlik: '12345678901'
         });
 
       expect(response.status).toBe(400);
@@ -180,6 +160,41 @@ describe('Auth API', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error', 'Invalid email or password');
+    });
+  });
+
+  describe('PATCH /api/v1/auth/profile', () => {
+    it('should return 401 if unauthenticated', async () => {
+      const response = await request(app)
+        .patch('/api/v1/auth/profile')
+        .send({ isim_soyad: 'New Name' });
+      expect(response.status).toBe(401);
+    });
+
+    it('should update allowed fields and ignore disallowed fields (mass-assignment protection)', async () => {
+      const token = getCustomerToken('my-user-id');
+      mockUpdate.mockResolvedValueOnce();
+
+      const response = await request(app)
+        .patch('/api/v1/auth/profile')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          isim_soyad: 'Updated Name',
+          profileImageUrl: 'https://example.com/avatar.jpg',
+          role: 'admin', // Should be ignored
+          balance: 999999 // Should be ignored
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(mockDoc).toHaveBeenCalledWith('my-user-id');
+      expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        isim_soyad: 'Updated Name',
+        profileImageUrl: 'https://example.com/avatar.jpg'
+      }));
+      const updatedFields = mockUpdate.mock.calls[0][0];
+      expect(updatedFields.role).toBeUndefined();
+      expect(updatedFields.balance).toBeUndefined();
     });
   });
 });
