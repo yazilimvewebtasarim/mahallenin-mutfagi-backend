@@ -29,7 +29,7 @@ router.put('/:id/status', authenticateJWT, authorizeRole('chef'), async (req, re
     // Get chefId from authenticated user, not from request body
     const chefId = req.user.userId;
 
-    const validStatuses = ['pending', 'preparing', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'preparing', 'on_the_way', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }

@@ -314,6 +314,26 @@ describe('Orders API', () => {
       expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'preparing' }));
     });
 
+    it('should update status to on_the_way successfully', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ chefId: 'chef1', status: 'preparing' })
+      }).mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ chefId: 'chef1', status: 'on_the_way' })
+      });
+
+      mockUpdate.mockResolvedValue();
+
+      const res = await request(app)
+        .put('/api/v1/chef/orders/o1/status')
+        .set('Authorization', `Bearer ${chefToken}`)
+        .send({ status: 'on_the_way' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('on_the_way');
+      expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'on_the_way' }));
+    });
+
     it('should handle db errors', async () => {
       mockGet.mockRejectedValue(new Error('DB Error'));
       const res = await request(app)
