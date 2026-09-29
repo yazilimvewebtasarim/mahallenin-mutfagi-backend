@@ -4,6 +4,24 @@ const SHOPIER_API_KEY = process.env.SHOPIER_API_KEY || 'shopier_test_api_key';
 const SHOPIER_API_SECRET = process.env.SHOPIER_API_SECRET || 'shopier_test_api_secret';
 const BASE_URL = process.env.BASE_URL || 'https://mahallenin-mutfagi-backend.onrender.com';
 
+function getEffectiveApiKey() {
+  const rawKey = process.env.SHOPIER_API_KEY || 'shopier_test_api_key';
+  if (rawKey.includes('.')) {
+    try {
+      const parts = rawKey.split('.');
+      if (parts.length >= 2) {
+        const payloadBase64 = parts[1];
+        const normalized = payloadBase64.padEnd(payloadBase64.length + (4 - payloadBase64.length % 4) % 4, '=');
+        const payload = JSON.parse(Buffer.from(normalized, 'base64').toString('utf8'));
+        if (payload.aud) {
+          return payload.aud;
+        }
+      }
+    } catch (_) {}
+  }
+  return rawKey;
+}
+
 /**
  * Generate Shopier payment form data with SHA256 HMAC signature
  */
@@ -20,7 +38,7 @@ function generateShopierPaymentData({
   callbackUrl,
   productName = 'Mahallenin Mutfagi Siparis'
 }) {
-  const apiKey = SHOPIER_API_KEY;
+  const apiKey = getEffectiveApiKey();
   const apiSecret = SHOPIER_API_SECRET;
 
   const cleanPhone = (buyerPhone || '05555555555').replace(/\D/g, '');
