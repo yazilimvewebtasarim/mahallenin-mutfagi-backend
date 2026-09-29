@@ -190,5 +190,44 @@ describe('Comprehensive Security & Authorization Suite', () => {
       expect(res.status).toBe(403);
       expect(res.body.message).toMatch(/own orders/i);
     });
+
+    it('prevents customer from accepting a bid on another customer request', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          customerId: 'customer_2',
+          status: 'open',
+          bids: [{ chefId: 'chef_1', price: 200 }]
+        })
+      });
+
+      const res = await request(app)
+        .post('/api/v1/customer/requests/req_123/accept-bid')
+        .set('Authorization', `Bearer ${customerToken1}`)
+        .send({ chefId: 'chef_1' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/not own/i);
+    });
+
+    it('prevents chef from bidding on request targeted to a different chef', async () => {
+      mockGet.mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          customerId: 'customer_1',
+          status: 'open',
+          targetChefId: 'chef_2',
+          bids: []
+        })
+      });
+
+      const res = await request(app)
+        .post('/api/v1/chef/requests/req_123/bid')
+        .set('Authorization', `Bearer ${chefToken1}`)
+        .send({ price: 150, note: 'Yapabilirim' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/another chef/i);
+    });
   });
 });

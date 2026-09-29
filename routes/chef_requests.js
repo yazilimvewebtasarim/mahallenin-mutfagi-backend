@@ -1,20 +1,20 @@
 const express = require('express');
 const { db } = require('../firebase');
 const router = express.Router();
+const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
 // Get requests available to bid on
-router.get('/', async (req, res) => {
+// PROTECTED: Only authenticated chefs
+router.get('/', authenticateJWT, authorizeRole('chef'), async (req, res) => {
   try {
-    const { chefId } = req.query;
+    const chefId = req.user.userId;
     let query = db.collection('food_requests').where('status', '==', 'open');
     
     // If targetChefId is specified in the request, only that chef should see it
     const snapshot = await query.get();
     let requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    if (chefId) {
-      requests = requests.filter(r => !r.targetChefId || r.targetChefId === chefId);
-    }
+    requests = requests.filter(r => !r.targetChefId || r.targetChefId === chefId);
 
     res.json({ success: true, count: requests.length, data: requests });
   } catch (error) {
@@ -23,12 +23,14 @@ router.get('/', async (req, res) => {
 });
 
 // Bid on a request
-router.post('/:requestId/bid', async (req, res) => {
+// PROTECTED: Only authenticated chefs
+router.post('/:requestId/bid', authenticateJWT, authorizeRole('chef'), async (req, res) => {
   try {
-    const { chefId, chefName, price, note } = req.body;
+    const chefId = req.user.userId;
+    const { price, note } = req.body;
     
-    if (!chefId || !price) {
-      return res.status(400).json({ success: false, message: 'Missing chefId or price' });
+    if (!price || isNaN(price) || Number(price) <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid price is required' });
     }
 
     const reqRef = db.collection('food_requests').doc(req.params.requestId);
@@ -39,12 +41,25 @@ router.post('/:requestId/bid', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Request is no longer open' });
     }
 
+    if (doc.data().targetChefId && doc.data().targetChefId !== chefId) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Request is targeted to another chef' });
+    }
+
+    // Fetch chef's display name from users
+    let chefName = 'Aşçı';
+    try {
+      const chefDoc = await db.collection('users').doc(chefId).get();
+      if (chefDoc.exists && chefDoc.data().name) {
+        chefName = chefDoc.data().name;
+      }
+    } catch (_) {}
+
     const bids = doc.data().bids || [];
     const existingBidIndex = bids.findIndex(b => b.chefId === chefId);
     
     const newBid = {
       chefId,
-      chefName: chefName || 'Aşçı',
+      chefName: req.body.chefName || chefName,
       price: Number(price),
       note: note || '',
       createdAt: new Date().toISOString()
@@ -57,7 +72,7 @@ router.post('/:requestId/bid', async (req, res) => {
     }
 
     await reqRef.update({ bids, updatedAt: new Date().toISOString() });
-    res.json({ success: true, message: 'Bid submitted' });
+    res.json({ success: true, message: 'Bid submitted', data: newBid });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

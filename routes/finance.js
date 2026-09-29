@@ -3,6 +3,57 @@ const router = express.Router();
 const { db } = require('../firebase');
 const { authenticateJWT, authorizeRole } = require('../middleware/auth');
 
+// GET /api/v1/chef/finance
+// PROTECTED: Only authenticated chefs can view their finance summary
+router.get('/', authenticateJWT, authorizeRole('chef'), async (req, res) => {
+  try {
+    const chefId = req.user.userId;
+    const chefDoc = await db.collection('users').doc(chefId).get();
+    
+    if (!chefDoc.exists) {
+      return res.status(404).json({ success: false, error: 'Chef not found' });
+    }
+
+    const chefData = chefDoc.data();
+    const balance = Number(chefData.balance) || 0;
+    const iban = chefData.iban || '';
+
+    // Fetch withdrawals history
+    let withdrawals = [];
+    try {
+      const withdrawalsSnapshot = await db.collection('withdrawals')
+        .where('chefId', '==', chefId)
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get();
+        
+      withdrawals = withdrawalsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (_) {
+      // Fallback if index not yet created
+      const withdrawalsSnapshot = await db.collection('withdrawals')
+        .where('chefId', '==', chefId)
+        .get();
+      withdrawals = withdrawalsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        balance,
+        iban,
+        withdrawals
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // POST /api/v1/chef/finance/update-iban
 // PROTECTED: Only authenticated chefs can update their own IBAN
 router.post('/update-iban', authenticateJWT, authorizeRole('chef'), async (req, res) => {
