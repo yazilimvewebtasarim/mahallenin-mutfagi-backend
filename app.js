@@ -18,6 +18,7 @@ const chefSubscriptionRoutes = require('./routes/chef_subscription');
 const customerRequestsRoutes = require('./routes/customer_requests');
 const chefRequestsRoutes = require('./routes/chef_requests');
 const uploadRoutes = require('./routes/upload');
+const platformRoutes = require('./routes/platform');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/customer', customerRoutes);
 app.use('/api/v1/stories', storiesRoutes);
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/platform', platformRoutes);
 
 // PROTECTED ROUTES (Authentication required)
 app.use('/api/v1/chef/foods', foodRoutes);
