@@ -36,6 +36,7 @@ router.post('/create-cash', authenticateJWT, authorizeRole('customer'), async (r
 });
 
 const { initializeCheckoutForm, retrieveCheckoutForm } = require('../config/iyzico');
+const { generateShopierPaymentData, verifyShopierCallback } = require('../config/shopier');
 
 // PROTECTED: Online credit card payment with Iyzico
 router.post('/checkout-form/init', authenticateJWT, authorizeRole('customer'), async (req, res) => {
@@ -235,6 +236,194 @@ router.post('/iyzico-callback', async (req, res) => {
     `);
   } catch (err) {
     res.status(500).send(`<h3>Callback hatası: ${err.message}</h3>`);
+  }
+});
+
+// SHOPIER ORDER PAYMENT INIT: POST /api/v1/payment/shopier/init
+// PROTECTED: Only authenticated customer who owns the order
+router.post('/shopier/init', authenticateJWT, authorizeRole('customer'), async (req, res) => {
+  try {
+    const { orderId, amount } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'orderId is required' });
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const orderData = orderDoc.data();
+    if (orderData.customerId !== req.user.userId) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not own this order' });
+    }
+
+    let customerName = 'Müşteri';
+    let customerSurname = 'Kullanıcı';
+    let customerPhone = '05555555555';
+    let customerEmail = 'customer@mahalleninmutfagi.com';
+    let customerAddress = orderData.deliveryAddress || 'Mahallenin Mutfağı Teslimat Adresi';
+
+    try {
+      const userDoc = await db.collection('users').doc(req.user.userId).get();
+      if (userDoc.exists) {
+        const udata = userDoc.data();
+        if (udata.name) {
+          const parts = udata.name.trim().split(' ');
+          customerName = parts[0] || customerName;
+          customerSurname = parts.slice(1).join(' ') || 'Müşteri';
+        }
+        if (udata.phone) customerPhone = udata.phone;
+        if (udata.email) customerEmail = udata.email;
+        if (udata.address) customerAddress = udata.address;
+      }
+    } catch (_) {}
+
+    const orderAmount = Number(amount) || orderData.total || 0;
+    const callbackBase = process.env.BASE_URL || 'https://mahallenin-mutfagi-backend.onrender.com';
+    const callbackUrl = `${callbackBase}/api/v1/payment/shopier-callback`;
+
+    const shopierData = generateShopierPaymentData({
+      orderId,
+      buyerName: customerName,
+      buyerSurname: customerSurname,
+      buyerEmail: customerEmail,
+      buyerPhone: customerPhone,
+      buyerAddress: customerAddress,
+      total: orderAmount,
+      currency: 'TRY',
+      callbackUrl,
+      productName: `Sipariş #${orderId.substring(0, 6)}`
+    });
+
+    await orderRef.update({
+      paymentMethod: 'shopier',
+      paymentStatus: 'initiated',
+      updatedAt: new Date().toISOString()
+    });
+
+    const paymentPageUrl = `${callbackBase}/api/v1/payment/shopier-pay/${orderId}`;
+
+    res.status(200).json({
+      success: true,
+      provider: 'shopier',
+      orderId,
+      amount: orderAmount,
+      paymentPageUrl,
+      formData: shopierData.formData,
+      actionUrl: shopierData.actionUrl
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// SHOPIER ORDER AUTO-REDIRECT: GET /api/v1/payment/shopier-pay/:orderId
+router.get('/shopier-pay/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    let orderData = { total: 100, deliveryAddress: 'Mahallenin Mutfağı' };
+    
+    try {
+      const orderDoc = await db.collection('orders').doc(orderId).get();
+      if (orderDoc && orderDoc.exists) {
+        orderData = orderDoc.data();
+      }
+    } catch (_) {}
+
+    const callbackBase = process.env.BASE_URL || 'https://mahallenin-mutfagi-backend.onrender.com';
+    const callbackUrl = `${callbackBase}/api/v1/payment/shopier-callback`;
+
+    const shopierData = generateShopierPaymentData({
+      orderId,
+      buyerName: 'Müşteri',
+      buyerSurname: 'Kullanıcı',
+      buyerEmail: 'customer@mahalleninmutfagi.com',
+      buyerPhone: '05555555555',
+      buyerAddress: orderData.deliveryAddress || 'Mahallenin Mutfağı',
+      total: orderData.total || 10,
+      currency: 'TRY',
+      callbackUrl,
+      productName: `Sipariş #${orderId.substring(0, 6)}`
+    });
+
+    const inputs = Object.entries(shopierData.formData)
+      .map(([k, v]) => `<input type="hidden" name="${k}" value="${v}">`)
+      .join('\n');
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Shopier Güvenli Ödeme - Mahallenin Mutfağı</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fafafa; }
+          .loader { text-align: center; color: #555; }
+          .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #ea004b; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="loader">
+          <div class="spinner"></div>
+          <h3>Shopier Güvenli Ödeme Sayfasına Yönlendiriliyorsunuz...</h3>
+          <p>Lütfen bekleyiniz, sayfa otomatik olarak açılacaktır.</p>
+        </div>
+        <form id="shopier_form" method="POST" action="${shopierData.actionUrl}">
+          ${inputs}
+        </form>
+        <script>
+          document.getElementById('shopier_form').submit();
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send(`<h3>Yönlendirme hatası: ${err.message}</h3>`);
+  }
+});
+
+// SHOPIER CUSTOMER PAYMENT CALLBACK: POST /api/v1/payment/shopier-callback
+router.post('/shopier-callback', async (req, res) => {
+  try {
+    const { platform_order_id, status, random_nr, signature } = req.body;
+    const orderId = platform_order_id;
+
+    if (!orderId) {
+      return res.status(400).send('<h3>Sipariş ID bulunamadı</h3>');
+    }
+
+    const isValid = verifyShopierCallback({ platform_order_id, status, random_nr, signature });
+    const isSuccess = (status === 'success' || status === '1') && isValid;
+
+    try {
+      await db.collection('orders').doc(orderId).update({
+        paymentStatus: isSuccess ? 'paid' : 'failed',
+        status: isSuccess ? 'pending' : 'cancelled',
+        updatedAt: new Date().toISOString()
+      });
+    } catch (_) {}
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${isSuccess ? 'Shopier Ödemesi Başarılı' : 'Shopier Ödemesi Başarısız'}</title>
+        <style>body { font-family: sans-serif; text-align: center; padding: 40px; }</style>
+      </head>
+      <body>
+        <h2>${isSuccess ? 'Sipariş Ödemesi Başarıyla Alındı! ✅' : 'Ödeme Gerçekleştirilemedi ❌'}</h2>
+        <p>${isSuccess ? 'Aşçımız siparişinizi hazırlamaya başlayacak.' : 'Lütfen farklı bir ödeme yöntemi deneyin.'}</p>
+        <a href="mahalleninmutfagi://order-success">Uygulamaya Dön</a>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    res.status(500).send(`<h3>Shopier callback hatası: ${err.message}</h3>`);
   }
 });
 
