@@ -25,7 +25,18 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const path = require('path');
+
 // PUBLIC ROUTES (No authentication required)
+app.get('/privacy-policy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'privacy-policy.html'));
+});
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'privacy-policy.html'));
+});
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/customer', customerRoutes);
 app.use('/api/v1/stories', storiesRoutes);

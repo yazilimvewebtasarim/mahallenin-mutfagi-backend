@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gizlilik Politikası — Mahallenin Mutfağı</title>
+    <style>
+        :root {
+            --primary: #c81d25;
+            --text: #2d3748;
+            --bg: #f7fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--card);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            border: 1px solid var(--border);
+        }
+        h1 {
+            color: var(--primary);
+            font-size: 2rem;
+            margin-top: 0;
+            border-bottom: 2px solid #fee2e2;
+            padding-bottom: 12px;
+        }
+        h2 {
+            color: #1a202c;
+            font-size: 1.3rem;
+            margin-top: 28px;
+        }
+        p, li {
+            color: #4a5568;
+            font-size: 1rem;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        .meta {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+        .highlight {
+            background-color: #fff5f5;
+            border-left: 4px solid var(--primary);
+            padding: 12px 16px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.85rem;
+            color: #a0aec0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mahallenin Mutfağı — Gizlilik Politikası</h1>
+        <div class="meta">Son Güncelleme: 5 Ekim 2026 | AYYILDIZ Digital</div>
+
+        <p><strong>AYYILDIZ Digital</strong> ("biz", "bizim" veya "Şirket") olarak, <strong>Mahallenin Mutfağı</strong> mobil uygulamamızı kullanan kullanıcılarımızın ("Kullanıcı", "Siz") kişisel verilerinin güvenliğine ve gizliliğine en yüksek önemi veriyoruz. Bu Gizlilik Politikası, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK"), Avrupa Birliği Genel Veri Koruma Tüzüğü ("GDPR") ve Google Play Geliştirici Politikaları uyarınca hazırlanmıştır.</p>
+
+        <div class="highlight">
+            <strong>Özet:</strong> Mahallenin Mutfağı, yalnızca siparişlerinizi teslim etmek, hesap güvenliğinizi sağlamak ve usta aşçılarımızla iletişiminizi yürütmek için gerekli asgari bilgileri toplar. Verileriniz asla üçüncü taraflara satılmaz.
+        </div>
+
+        <h2>1. Toplanan Kişisel Veriler</h2>
+        <p>Uygulamamızı kullanırken aşağıdaki kategorilerde veriler işlenebilir:</p>
+        <ul>
+            <li><strong>Kimlik ve İletişim Bilgileri:</strong> Ad, soyad, e-posta adresi, telefon numarası (hesap açılışı, sipariş teyidi ve müşteri hizmetleri için).</li>
+            <li><strong>Teslimat ve Adres Bilgileri:</strong> İl, ilçe, mahalle, cadde/sokak, bina no, kat/daire bilgileri ve kurye tarifleri (yemeklerin adresinize doğru ve sıcak ulaşması için).</li>
+            <li><strong>Görsel ve Belge Verileri:</strong> Aşçı kullanıcılarımız tarafından yüklenen yemek fotoğrafları, mutfak fotoğrafları ve hijyen belgeleri (kalite ve hijyen standartlarının teyidi için).</li>
+            <li><strong>İşlem ve Sipariş Geçmişi:</strong> Geçmiş siparişleriniz, sepet içerikleri ve özel yemek talepleriniz.</li>
+            <li><strong>Cihaz ve Bildirim Bilgileri:</strong> Sipariş durumu güncellemelerini ("Yola Çıktı", "Hazırlanıyor") anlık iletebilmek amacıyla Firebase Cloud Messaging (FCM) bildirim anahtarı.</li>
+        </ul>
+
+        <h2>2. Verilerin İşlenme Amaçları</h2>
+        <p>Toplanan kişisel verileriniz şu amaçlarla kullanılır:</p>
+        <ul>
+            <li>Kullanıcı hesabı oluşturmak ve kimlik doğrulaması sağlamak,</li>
+            <li>Yemek siparişlerinizi aşçılara iletmek ve adresinize teslim edilmesini sağlamak,</li>
+            <li>Sipariş durumunu canlı takip etmenizi sağlamak ve bildirim göndermek,</li>
+            <li>Özel yemek talepleri üzerinden aşçılardan teklif almanıza olanak tanımak,</li>
+            <li>Yasal yükümlülüklerimizi yerine getirmek ve olası uyuşmazlıkları çözmek.</li>
+        </ul>
+
+        <h2>3. Veri Güvenliği ve Şifreleme</h2>
+        <p>Tüm kullanıcı verileri, endüstri standardı <strong>HTTPS / TLS 1.3</strong> şifreleme protokolleri üzerinden sunucularımıza aktarılır. Hassas parolalar veritabanımızda <strong>bcrypt</strong> tek yönlü kriptografik algoritmasıyla tuzlanarak (salt) saklanır; şirket çalışanları dahil hiç kimse açık parolanızı göremez.</p>
+
+        <h2>4. Üçüncü Taraflarla Paylaşım</h2>
+        <p>Kişisel verileriniz hiçbir koşulda ticari veya reklam amaçlarıyla üçüncü şahıslara satılmaz, kiralanmaz veya devredilmez. Yalnızca siparişin ifası için sipariş verilen aşçı ile teslimat adresi/telefon paylaşılır ve kanunen yetkili resmi makamların yasal talepleri doğrultusunda ilgili mercilerle paylaşılabilir.</p>
+
+        <h2>5. Veri Saklama ve Hesap Silme Hakkı</h2>
+        <p>Kullanıcılarımız diledikleri zaman uygulamamız içerisindeki <strong>Ayarlar &gt; Hesabımı Sil</strong> seçeneğini kullanarak hesaplarını ve ilişkili tüm kişisel verilerini anında ve kalıcı olarak silebilirler. Veri silme talebi alındığında kullanıcıya ait tüm kayıtlar sunucularımızdan tamamen temizlenir.</p>
+
+        <h2>6. Çocukların Gizliliği</h2>
+        <p>Uygulamamız 13 yaşın altındaki çocuklara yönelik değildir ve bilerek 13 yaş altındaki bireylerden kişisel bilgi toplamayız.</p>
+
+        <h2>7. İletişim</h2>
+        <p>Gizlilik Politikamız veya kişisel verilerinizle ilgili her türlü soru, görüş ve talepleriniz için bizimle iletişime geçebilirsiniz:</p>
+        <ul>
+            <li><strong>Geliştirici:</strong> AYYILDIZ Digital</li>
+            <li><strong>E-posta:</strong> yazilimvewebtasarim@gmail.com</li>
+        </ul>
+
+        <footer>
+            &copy; 2026 AYYILDIZ Digital. Tüm hakları saklıdır.
+        </footer>
+    </div>
+</body>
+</html>
