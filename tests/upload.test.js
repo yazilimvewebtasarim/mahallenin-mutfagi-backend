@@ -52,6 +52,13 @@ describe('Upload API (/api/v1/upload)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.url).toBeDefined();
-    expect(res.body.url).toMatch(/\/uploads\/foods\/\d+_[a-z0-9]+\.png$/);
+    expect(res.body.url).toMatch(/\/api\/v1\/files\/[a-zA-Z0-9_-]+\.png$/);
+
+    // Verify the file can be retrieved via GET /api/v1/files/:file
+    const fileUrlPath = new URL(res.body.url).pathname;
+    const fileRes = await request(app).get(fileUrlPath);
+    expect(fileRes.statusCode).toBe(200);
+    expect(fileRes.headers['content-type']).toMatch(/image\/png/);
+    expect(fileRes.body.length).toBeGreaterThan(0);
   });
 });

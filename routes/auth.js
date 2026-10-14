@@ -185,7 +185,7 @@ router.post('/refresh-token', async (req, res) => {
     }
 
     jwt.verify(refreshToken, JWT_SECRET, (err, decoded) => {
-      if (err) {
+      if (err || !decoded || decoded.type !== 'refresh') {
         return res.status(401).json({ error: 'Invalid or expired refresh token' });
       }
 
