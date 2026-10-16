@@ -54,12 +54,14 @@ router.post('/initialize-checkout', authenticateJWT, authorizeRole('chef'), asyn
       const chefDoc = await db.collection('users').doc(chefId).get();
       if (chefDoc.exists) {
         const udata = chefDoc.data();
-        if (udata.name) {
-          const parts = udata.name.trim().split(' ');
+        const fullName = udata.isim_soyad || udata.name;
+        if (fullName) {
+          const parts = fullName.trim().split(' ');
           chefName = parts[0] || chefName;
           chefSurname = parts.slice(1).join(' ') || 'Aşçı';
         }
-        if (udata.phone) chefPhone = udata.phone.startsWith('+') ? udata.phone : `+90${udata.phone.replace(/^0/, '')}`;
+        const rawPhone = udata.telefon || udata.phone;
+        if (rawPhone) chefPhone = rawPhone.startsWith('+') ? rawPhone : `+90${rawPhone.replace(/^0/, '')}`;
         if (udata.email) chefEmail = udata.email;
         if (udata.address) chefAddress = udata.address;
       }
@@ -195,13 +197,18 @@ router.post('/iyzico-callback', async (req, res) => {
     let isSuccess = false;
     let chefId = null;
     let rights = 10;
+    let alreadyCompleted = false;
 
     // Check transaction record
     const transRef = db.collection('subscription_transactions').doc(token);
     const transDoc = await transRef.get();
     if (transDoc.exists) {
-      chefId = transDoc.data().chefId;
-      rights = transDoc.data().rights || 10;
+      const tData = transDoc.data() || {};
+      chefId = tData.chefId;
+      rights = tData.rights || 10;
+      if (tData.status === 'completed') {
+        alreadyCompleted = true;
+      }
     }
 
     // Attempt to verify with Iyzico
@@ -211,31 +218,33 @@ router.post('/iyzico-callback', async (req, res) => {
         isSuccess = true;
       }
     } catch (_) {
-      // In dev/sandbox fallback mode, treat callback submission as completed
-      if (token.startsWith('sub_')) {
+      // In dev/sandbox fallback mode, treat callback submission as completed only if transDoc exists
+      if (token.startsWith('sub_') && transDoc.exists) {
         isSuccess = true;
       }
     }
 
     if (isSuccess && chefId) {
-      const chefRef = db.collection('users').doc(chefId);
-      const chefDoc = await chefRef.get();
-      if (chefDoc.exists) {
-        const currentLimit = chefDoc.data().paidOrderLimit || 10;
-        await chefRef.update({
-          paidOrderLimit: currentLimit + rights,
-          isVisible: true
-        });
+      if (!alreadyCompleted) {
+        const chefRef = db.collection('users').doc(chefId);
+        const chefDoc = await chefRef.get();
+        if (chefDoc.exists) {
+          const currentLimit = chefDoc.data().paidOrderLimit || 10;
+          await chefRef.update({
+            paidOrderLimit: currentLimit + rights,
+            isVisible: true
+          });
 
-        // Reactivate chef's foods
-        const foodsSnapshot = await db.collection('foods').where('chefId', '==', chefId).get();
-        const batch = db.batch();
-        foodsSnapshot.forEach(doc => {
-          batch.update(doc.ref, { chefIsVisible: true });
-        });
-        await batch.commit();
+          // Reactivate chef's foods
+          const foodsSnapshot = await db.collection('foods').where('chefId', '==', chefId).get();
+          const batch = db.batch();
+          foodsSnapshot.forEach(doc => {
+            batch.update(doc.ref, { chefIsVisible: true });
+          });
+          await batch.commit();
 
-        await transRef.update({ status: 'completed', completedAt: new Date().toISOString() });
+          await transRef.update({ status: 'completed', completedAt: new Date().toISOString() });
+        }
       }
 
       return res.send(`
@@ -383,12 +392,14 @@ router.post('/initialize-shopier', authenticateJWT, authorizeRole('chef'), async
       const chefDoc = await db.collection('users').doc(chefId).get();
       if (chefDoc.exists) {
         const udata = chefDoc.data();
-        if (udata.name) {
-          const parts = udata.name.trim().split(' ');
+        const fullName = udata.isim_soyad || udata.name;
+        if (fullName) {
+          const parts = fullName.trim().split(' ');
           chefName = parts[0] || chefName;
           chefSurname = parts.slice(1).join(' ') || 'Aşçı';
         }
-        if (udata.phone) chefPhone = udata.phone;
+        const rawPhone = udata.telefon || udata.phone;
+        if (rawPhone) chefPhone = rawPhone;
         if (udata.email) chefEmail = udata.email;
         if (udata.address) chefAddress = udata.address;
       }
@@ -446,6 +457,15 @@ router.post('/initialize-shopier', authenticateJWT, authorizeRole('chef'), async
   }
 });
 
+function escapeHtmlAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // SHOPIER AUTO-REDIRECT FORM: GET /api/v1/chef/subscription/shopier-pay/:token
 router.get('/shopier-pay/:token', async (req, res) => {
   try {
@@ -480,7 +500,7 @@ router.get('/shopier-pay/:token', async (req, res) => {
     });
 
     const inputs = Object.entries(shopierData.formData)
-      .map(([k, v]) => `<input type="hidden" name="${k}" value="${v}">`)
+      .map(([k, v]) => `<input type="hidden" name="${escapeHtmlAttr(k)}" value="${escapeHtmlAttr(v)}">`)
       .join('\n');
 
     res.send(`
@@ -531,13 +551,18 @@ router.post('/shopier-callback', async (req, res) => {
 
     let chefId = null;
     let rights = 10;
+    let alreadyCompleted = false;
 
     const transRef = db.collection('subscription_transactions').doc(token);
     try {
       const transDoc = await transRef.get();
       if (transDoc.exists) {
-        chefId = transDoc.data().chefId;
-        rights = transDoc.data().rights || 10;
+        const tData = transDoc.data() || {};
+        chefId = tData.chefId;
+        rights = tData.rights || 10;
+        if (tData.status === 'completed') {
+          alreadyCompleted = true;
+        }
       }
     } catch (_) {}
 
@@ -551,27 +576,29 @@ router.post('/shopier-callback', async (req, res) => {
     }
 
     if (isSuccess && chefId) {
-      try {
-        const chefRef = db.collection('users').doc(chefId);
-        const chefDoc = await chefRef.get();
-        if (chefDoc.exists) {
-          const currentLimit = chefDoc.data().paidOrderLimit || 10;
-          await chefRef.update({
-            paidOrderLimit: currentLimit + rights,
-            isVisible: true
-          });
+      if (!alreadyCompleted) {
+        try {
+          const chefRef = db.collection('users').doc(chefId);
+          const chefDoc = await chefRef.get();
+          if (chefDoc.exists) {
+            const currentLimit = chefDoc.data().paidOrderLimit || 10;
+            await chefRef.update({
+              paidOrderLimit: currentLimit + rights,
+              isVisible: true
+            });
 
-          // Reactivate foods
-          const foodsSnapshot = await db.collection('foods').where('chefId', '==', chefId).get();
-          const batch = db.batch();
-          foodsSnapshot.forEach(doc => {
-            batch.update(doc.ref, { chefIsVisible: true });
-          });
-          await batch.commit();
+            // Reactivate foods
+            const foodsSnapshot = await db.collection('foods').where('chefId', '==', chefId).get();
+            const batch = db.batch();
+            foodsSnapshot.forEach(doc => {
+              batch.update(doc.ref, { chefIsVisible: true });
+            });
+            await batch.commit();
 
-          await transRef.update({ status: 'completed', completedAt: new Date().toISOString() });
-        }
-      } catch (_) {}
+            await transRef.update({ status: 'completed', completedAt: new Date().toISOString() });
+          }
+        } catch (_) {}
+      }
 
       return res.send(`
         <!DOCTYPE html>

@@ -106,7 +106,12 @@ function verifyShopierCallback({ platform_order_id, status, random_nr, signature
     .update(expectedData)
     .digest('base64');
 
-  return expectedSignature === signature || process.env.NODE_ENV === 'test' || !apiSecret || apiSecret === 'shopier_test_api_secret';
+  if (expectedSignature === signature) return true;
+  if (process.env.NODE_ENV === 'test') return true;
+  if (process.env.NODE_ENV !== 'production' && (!apiSecret || apiSecret === 'shopier_test_api_secret')) {
+    return true;
+  }
+  return false;
 }
 
 module.exports = {

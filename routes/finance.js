@@ -114,16 +114,16 @@ router.post('/withdraw', authenticateJWT, authorizeRole('chef'), async (req, res
         throw new Error('Insufficient funds');
       }
       
-      // Update chef balance
+      // Update chef balance with 2-decimal precision
       t.update(chefRef, {
-        balance: freshBalance - amount
+        balance: Math.round((freshBalance - amount) * 100) / 100
       });
       
       // Create withdrawal record
       const withdrawalRef = db.collection('withdrawals').doc();
       t.set(withdrawalRef, {
         chefId,
-        amount,
+        amount: Math.round(amount * 100) / 100,
         status: 'pending',
         createdAt: new Date().toISOString()
       });
@@ -134,6 +134,9 @@ router.post('/withdraw', authenticateJWT, authorizeRole('chef'), async (req, res
       success: true
     });
   } catch (error) {
+    if (error && error.message === 'Insufficient funds') {
+      return res.status(400).json({ error: 'Insufficient funds' });
+    }
     console.error('Error processing withdrawal:', error);
     res.status(500).json({ error: error.message });
   }

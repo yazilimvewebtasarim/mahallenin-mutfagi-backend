@@ -49,8 +49,9 @@ router.post('/:requestId/bid', authenticateJWT, authorizeRole('chef'), async (re
     let chefName = 'Aşçı';
     try {
       const chefDoc = await db.collection('users').doc(chefId).get();
-      if (chefDoc.exists && chefDoc.data().name) {
-        chefName = chefDoc.data().name;
+      if (chefDoc.exists) {
+        const cData = chefDoc.data() || {};
+        chefName = cData.isim_soyad || cData.name || 'Aşçı';
       }
     } catch (_) {}
 

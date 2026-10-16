@@ -6,6 +6,7 @@ const { db } = require('../firebase');
 const { authenticateJWT, JWT_SECRET } = require('../middleware/auth');
 
 const otpStore = new Map();
+const MAX_OTP_STORE_SIZE = 1000;
 
 // Send OTP
 router.post('/register/send-otp', async (req, res) => {
@@ -15,9 +16,15 @@ router.post('/register/send-otp', async (req, res) => {
       return res.status(400).json({ error: 'Telefon numarası gerekli' });
     }
     
+    // Bound OTP store size to prevent unbounded memory growth
+    if (otpStore.size >= MAX_OTP_STORE_SIZE) {
+      const oldestKey = otpStore.keys().next().value;
+      if (oldestKey !== undefined) otpStore.delete(oldestKey);
+    }
+
     // For development, we always use '123456'
     const otp = '123456';
-    otpStore.set(telefon, otp);
+    otpStore.set(telefon, { code: otp, expiresAt: Date.now() + 5 * 60 * 1000 });
     
     res.status(200).json({ message: 'OTP sent successfully' });
   } catch (error) {
@@ -184,19 +191,33 @@ router.post('/refresh-token', async (req, res) => {
       return res.status(400).json({ error: 'Refresh token is required' });
     }
 
-    jwt.verify(refreshToken, JWT_SECRET, (err, decoded) => {
+    jwt.verify(refreshToken, JWT_SECRET, async (err, decoded) => {
       if (err || !decoded || decoded.type !== 'refresh') {
         return res.status(401).json({ error: 'Invalid or expired refresh token' });
       }
 
+      let effectiveRole = decoded.role;
+      let effectiveEmail = decoded.email;
+      try {
+        const userDoc = await db.collection('users').doc(decoded.userId).get();
+        if (userDoc && typeof userDoc.exists === 'boolean') {
+          if (!userDoc.exists) {
+            return res.status(401).json({ error: 'User account no longer exists' });
+          }
+          const udata = userDoc.data() || {};
+          if (udata.role) effectiveRole = udata.role;
+          if (udata.email) effectiveEmail = udata.email;
+        }
+      } catch (_) {}
+
       const newToken = jwt.sign(
-        { userId: decoded.userId, email: decoded.email, role: decoded.role },
+        { userId: decoded.userId, email: effectiveEmail, role: effectiveRole },
         JWT_SECRET,
         { expiresIn: '30d' }
       );
 
       const newRefreshToken = jwt.sign(
-        { userId: decoded.userId, email: decoded.email, role: decoded.role, type: 'refresh' },
+        { userId: decoded.userId, email: effectiveEmail, role: effectiveRole, type: 'refresh' },
         JWT_SECRET,
         { expiresIn: '90d' }
       );
@@ -205,7 +226,7 @@ router.post('/refresh-token', async (req, res) => {
         success: true, 
         token: newToken, 
         refreshToken: newRefreshToken,
-        role: decoded.role,
+        role: effectiveRole,
         userId: decoded.userId
       });
     });
@@ -222,9 +243,8 @@ router.patch('/profile', authenticateJWT, async (req, res) => {
     const userId = req.user.userId; // Get userId from JWT token, not from request body
     
     // Whitelist of allowed fields that can be updated
-    const allowedFields = ['isim_soyad', 'profileImageUrl', 'hijyenBelgesi', 'hijyenBelgesiUrl', 'mutfakResmiUrl'];
+    const allowedFields = ['isim_soyad', 'telefon', 'profileImageUrl', 'hijyenBelgesi', 'hijyenBelgesiUrl', 'mutfakResmiUrl'];
 
-    
     // Build update object with only allowed fields
     const updateData = {};
     for (const field of allowedFields) {
@@ -241,6 +261,63 @@ router.patch('/profile', authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('Error updating profile:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Change password
+// PROTECTED: Requires authentication
+router.post('/change-password', authenticateJWT, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Mevcut şifre ve yeni şifre zorunludur.' });
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalıdır.' });
+    }
+
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+
+    const userData = userDoc.data() || {};
+    const isMatch = await bcrypt.compare(currentPassword, userData.password_hash || '');
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Mevcut şifreniz hatalı.' });
+    }
+
+    const password_hash = await bcrypt.hash(newPassword, 10);
+    await userRef.update({
+      password_hash,
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'Şifreniz başarıyla güncellendi.' });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete account
+// PROTECTED: Requires authentication
+router.delete('/account', authenticateJWT, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRef = db.collection('users').doc(userId);
+    if (typeof userRef.delete === 'function') {
+      await userRef.delete();
+    } else {
+      await userRef.update({ deleted: true, isVisible: false, deletedAt: new Date().toISOString() });
+    }
+    res.json({ success: true, message: 'Hesabınız silindi.' });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

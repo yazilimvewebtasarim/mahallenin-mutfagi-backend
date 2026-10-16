@@ -100,7 +100,18 @@ router.post('/:requestId/accept-bid', authenticateJWT, authorizeRole('customer')
           price: Number(bid.price),
           isim: `Özel Talep: ${data.title}`,
           aciklama: data.description,
-          chefNote: bid.note || ''
+          chefNote: bid.note || '',
+          note: bid.note || '',
+          food: {
+            id: `custom_${req.params.requestId}`,
+            chefId: bid.chefId,
+            isim: `Özel Talep: ${data.title}`,
+            aciklama: data.description || '',
+            fiyat: Number(bid.price),
+            porsiyon_stok: 1,
+            alerjen_durumu: '',
+            resim_url: ''
+          }
         }
       ],
       subtotal: Number(bid.price),
@@ -127,6 +138,7 @@ router.post('/:requestId/accept-bid', authenticateJWT, authorizeRole('customer')
       success: true,
       message: 'Bid accepted and order created successfully',
       orderId: orderRef.id,
+      order: orderData,
       data: { ...data, status: 'accepted', acceptedBid: bid, orderId: orderRef.id }
     });
   } catch (error) {

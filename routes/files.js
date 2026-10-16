@@ -7,12 +7,28 @@ const { readFile } = require('../services/file_store');
 router.get('/:file', async (req, res) => {
   try {
     const rawFile = req.params.file;
-    if (!rawFile) {
+    if (!rawFile || typeof rawFile !== 'string') {
       return res.status(400).send('File parameter missing');
     }
 
+    // Prevent path traversal attacks (e.g., ..%2fserviceAccountKey.json)
+    const safeFile = path.basename(rawFile);
+    if (
+      safeFile !== rawFile ||
+      rawFile.includes('..') ||
+      rawFile.includes('/') ||
+      rawFile.includes('\\') ||
+      rawFile.includes('\0') ||
+      !/^[a-zA-Z0-9_.-]+$/.test(safeFile)
+    ) {
+      return res.status(400).send('Invalid file name');
+    }
+
     // Extract ID (e.g. "docId123.jpg" -> "docId123")
-    const id = rawFile.includes('.') ? rawFile.split('.')[0] : rawFile;
+    const id = safeFile.includes('.') ? safeFile.split('.')[0] : safeFile;
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+      return res.status(400).send('Invalid file identifier');
+    }
 
     // 1. Try reading from durable Firestore file store
     const file = await readFile(id);
@@ -22,18 +38,19 @@ router.get('/:file', async (req, res) => {
       return res.send(file.buffer);
     }
 
-    // 2. Fallback: check local uploads folder
+    // 2. Fallback: check local uploads folder strictly within uploads root
+    const uploadsRoot = path.resolve(__dirname, '../uploads');
     const localCandidates = [
-      path.join(__dirname, '../uploads', rawFile),
-      path.join(__dirname, '../uploads/foods', rawFile),
-      path.join(__dirname, '../uploads/kitchens', rawFile),
-      path.join(__dirname, '../uploads/hygiene', rawFile),
-      path.join(__dirname, '../uploads/avatars', rawFile),
-      path.join(__dirname, '../uploads/general', rawFile),
+      path.resolve(uploadsRoot, safeFile),
+      path.resolve(uploadsRoot, 'foods', safeFile),
+      path.resolve(uploadsRoot, 'kitchens', safeFile),
+      path.resolve(uploadsRoot, 'hygiene', safeFile),
+      path.resolve(uploadsRoot, 'avatars', safeFile),
+      path.resolve(uploadsRoot, 'general', safeFile),
     ];
 
     for (const cand of localCandidates) {
-      if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+      if (cand.startsWith(uploadsRoot + path.sep) && fs.existsSync(cand) && fs.statSync(cand).isFile()) {
         return res.sendFile(cand);
       }
     }

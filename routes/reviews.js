@@ -56,6 +56,28 @@ router.post('/', authenticateJWT, authorizeRole('customer'), async (req, res) =>
 
     await reviewRef.set(reviewData);
 
+    // Update chef's average rating and reviewCount on users document
+    try {
+      const chefReviewsSnap = await db.collection('reviews').where('chefId', '==', chefId).get();
+      if (chefReviewsSnap && Array.isArray(chefReviewsSnap.docs)) {
+        const allRatings = chefReviewsSnap.docs
+          .map(d => (typeof d.data === 'function' ? Number(d.data().rating) : 0))
+          .filter(r => r >= 1 && r <= 5);
+        if (allRatings.length === 0) {
+          allRatings.push(rating);
+        }
+        const totalRating = allRatings.reduce((acc, r) => acc + r, 0);
+        const avg = parseFloat((totalRating / allRatings.length).toFixed(1));
+        const chefUserRef = db.collection('users').doc(chefId);
+        if (chefUserRef && typeof chefUserRef.update === 'function') {
+          await chefUserRef.update({
+            rating: avg,
+            reviewCount: allRatings.length
+          });
+        }
+      }
+    } catch (_) {}
+
     res.status(201).json({ success: true, data: reviewData });
 
   } catch (err) {
@@ -84,7 +106,7 @@ router.get('/:chefId', async (req, res) => {
       averageRating = parseFloat((sum / reviews.length).toFixed(1));
     }
 
-    res.json({ success: true, count: reviews.length, averageRating, data: reviews });
+    res.json({ success: true, count: reviews.length, averageRating, data: reviews, reviews });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

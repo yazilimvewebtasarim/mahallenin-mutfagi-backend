@@ -34,7 +34,10 @@ router.get('/chefs/:id', async (req, res) => {
         isim_soyad: data.isim_soyad,
         rating: data.rating || 0,
         reviewCount: data.reviewCount || 0,
-        imageUrl: data.profileImageUrl || null
+        imageUrl: data.profileImageUrl || null,
+        hijyenBelgesi: data.hijyenBelgesi === true,
+        hijyenBelgesiUrl: data.hijyenBelgesiUrl || null,
+        mutfakResmiUrl: data.mutfakResmiUrl || null
       }
     });
   } catch (error) {
@@ -44,7 +47,8 @@ router.get('/chefs/:id', async (req, res) => {
 
 router.get('/foods', async (req, res) => {
   try {
-    const { chefId, search } = req.query;
+    const { chefId } = req.query;
+    const search = req.query.search || req.query.q;
     let query = db.collection('foods').where('porsiyon_stok', '>', 0);
     
     if (chefId) {
@@ -56,7 +60,7 @@ router.get('/foods', async (req, res) => {
     foods = foods.filter(f => f.chefIsVisible !== false);
 
     if (search) {
-      const s = search.toLowerCase();
+      const s = String(search).toLowerCase();
       foods = foods.filter(f => f.isim && f.isim.toLowerCase().includes(s));
     }
 
@@ -74,10 +78,12 @@ router.post('/cart', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cart items cannot be empty' });
     }
 
+    const totalQtyByFoodId = {};
     for (const item of items) {
-      if (!item.foodId || !item.quantity || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+      if (!item || !item.foodId || !item.quantity || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
          return res.status(400).json({ success: false, message: 'Invalid item data' });
       }
+      totalQtyByFoodId[item.foodId] = (totalQtyByFoodId[item.foodId] || 0) + item.quantity;
     }
 
     const foodPromises = items.map(item => db.collection('foods').doc(item.foodId).get());
@@ -93,7 +99,7 @@ router.post('/cart', async (req, res) => {
       }
       
       const foodData = doc.data();
-      const requestedQty = items[i].quantity;
+      const totalRequestedForFood = totalQtyByFoodId[items[i].foodId];
       
       if (cartChefId === null) {
         cartChefId = foodData.chefId;
@@ -105,13 +111,29 @@ router.post('/cart', async (req, res) => {
         });
       }
 
-      if (requestedQty > foodData.porsiyon_stok) {
+      if (totalRequestedForFood > foodData.porsiyon_stok) {
         return res.status(400).json({ success: false, message: 'Insufficient stock' });
+      }
+
+      let itemPrice = Number(foodData.fiyat) || 0;
+      const extras = Array.isArray(items[i].selectedExtras) ? items[i].selectedExtras : [];
+      const serverExtras = Array.isArray(foodData.ekstralar) ? foodData.ekstralar : null;
+      for (const ex of extras) {
+        if (!ex || typeof ex !== 'object') continue;
+        if (serverExtras && serverExtras.length > 0) {
+          const exName = ex.ad || ex.isim || '';
+          const matched = serverExtras.find(se => (se.ad || se.isim) === exName);
+          if (matched && Number(matched.fiyat) > 0) {
+            itemPrice += Number(matched.fiyat);
+          }
+        } else if (ex.fiyat !== undefined && typeof ex.fiyat !== 'boolean' && !isNaN(Number(ex.fiyat)) && Number(ex.fiyat) >= 0) {
+          itemPrice += Number(ex.fiyat);
+        }
       }
 
       enrichedItems.push({
         ...items[i],
-        price: foodData.fiyat
+        price: itemPrice
       });
     }
 

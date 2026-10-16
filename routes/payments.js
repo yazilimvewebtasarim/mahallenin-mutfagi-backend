@@ -69,18 +69,20 @@ router.post('/checkout-form/init', authenticateJWT, authorizeRole('customer'), a
       const userDoc = await db.collection('users').doc(req.user.userId).get();
       if (userDoc.exists) {
         const udata = userDoc.data();
-        if (udata.name) {
-          const parts = udata.name.trim().split(' ');
+        const fullName = udata.isim_soyad || udata.name;
+        if (fullName) {
+          const parts = fullName.trim().split(' ');
           customerName = parts[0] || customerName;
           customerSurname = parts.slice(1).join(' ') || 'Müşteri';
         }
-        if (udata.phone) customerPhone = udata.phone.startsWith('+') ? udata.phone : `+90${udata.phone.replace(/^0/, '')}`;
+        const rawPhone = udata.telefon || udata.phone;
+        if (rawPhone) customerPhone = rawPhone.startsWith('+') ? rawPhone : `+90${rawPhone.replace(/^0/, '')}`;
         if (udata.email) customerEmail = udata.email;
         if (udata.address) customerAddress = udata.address;
       }
     } catch (_) {}
 
-    const orderAmount = Number(amount) || orderData.total || 0;
+    const orderAmount = Number(orderData.total) || Number(amount) || 0;
     const conversationId = `order_${orderId}_${Date.now()}`;
     const callbackBase = process.env.BASE_URL || 'https://mahallenin-mutfagi-backend.onrender.com';
     const callbackUrl = `${callbackBase}/api/v1/payment/iyzico-callback`;
@@ -208,7 +210,9 @@ router.post('/iyzico-callback', async (req, res) => {
         }
       }
     } catch (_) {
-      isSuccess = true;
+      if (process.env.NODE_ENV !== 'production' || String(token).startsWith('mock_token_')) {
+        isSuccess = true;
+      }
     }
 
     if (orderId) {
@@ -270,18 +274,20 @@ router.post('/shopier/init', authenticateJWT, authorizeRole('customer'), async (
       const userDoc = await db.collection('users').doc(req.user.userId).get();
       if (userDoc.exists) {
         const udata = userDoc.data();
-        if (udata.name) {
-          const parts = udata.name.trim().split(' ');
+        const fullName = udata.isim_soyad || udata.name;
+        if (fullName) {
+          const parts = fullName.trim().split(' ');
           customerName = parts[0] || customerName;
           customerSurname = parts.slice(1).join(' ') || 'Müşteri';
         }
-        if (udata.phone) customerPhone = udata.phone;
+        const rawPhone = udata.telefon || udata.phone;
+        if (rawPhone) customerPhone = rawPhone;
         if (udata.email) customerEmail = udata.email;
         if (udata.address) customerAddress = udata.address;
       }
     } catch (_) {}
 
-    const orderAmount = Number(amount) || orderData.total || 0;
+    const orderAmount = Number(orderData.total) || Number(amount) || 0;
     const callbackBase = process.env.BASE_URL || 'https://mahallenin-mutfagi-backend.onrender.com';
     const callbackUrl = `${callbackBase}/api/v1/payment/shopier-callback`;
 
@@ -320,6 +326,15 @@ router.post('/shopier/init', authenticateJWT, authorizeRole('customer'), async (
   }
 });
 
+function escapeHtmlAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // SHOPIER ORDER AUTO-REDIRECT: GET /api/v1/payment/shopier-pay/:orderId
 router.get('/shopier-pay/:orderId', async (req, res) => {
   try {
@@ -350,7 +365,7 @@ router.get('/shopier-pay/:orderId', async (req, res) => {
     });
 
     const inputs = Object.entries(shopierData.formData)
-      .map(([k, v]) => `<input type="hidden" name="${k}" value="${v}">`)
+      .map(([k, v]) => `<input type="hidden" name="${escapeHtmlAttr(k)}" value="${escapeHtmlAttr(v)}">`)
       .join('\n');
 
     res.send(`

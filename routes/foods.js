@@ -70,7 +70,9 @@ router.get('/', async (req, res) => {
 
     snapshot.forEach((doc) => {
       const data = doc.data();
-      if (data.chefIsVisible !== false) {
+      // When chefId is explicitly queried (chef managing their own menu), return all their dishes;
+      // otherwise only return dishes from visible chefs.
+      if (chefId || data.chefIsVisible !== false) {
         foods.push({
           id: doc.id,
           ...data
